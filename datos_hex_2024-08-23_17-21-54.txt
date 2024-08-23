@@ -1,0 +1,14 @@
+# Velocidad en baudios: 1200
+00 10 4c 0c 98 cc 8c 04
+10 0c 4c 88 8c ce 88 10 4c 8c 8c ce cc 04 10 46 cc 08 08 4a 84 0c 10 46 cc 08 4e 48 88 c6 10 84 8e c8 08 08
+84 0c
+# STREAM TERMINADO
+00 40 88 08 88 ce 88 00
+10 88 4c 88 8c ce 44 00 10 8a 4c 88 8c ce 44 00 10 44 8c 08 4c 08 88 c6 10 84 8e c8 08 08 84 0c 40 8c 08 0c 48 08 88 00
+# STREAM TERMINADO
+00 10 4c 0c 88 cc 8c 88 02
+50 4c 0c 8c cc 84 04 00 40 84 8e 8c 8c 08 4c 10 44 8c 08 4c 08 88 c4 10 44 8c 08 4c 08 ca c4 50 44 0c 88 48 08 8a 0c
+# STREAM TERMINADO
+00 10 0c 4c 88 8c ce 88 50 0c
+4e c8 8c 0c 00 50 4c 0c 8c cc cc 04 10 44 cc 08 4c 08 88 c4 50 04 8c 88 48 08 86 0c 10 84 8e c8 08 4a 84 0c
+# STREAM TERMINADO

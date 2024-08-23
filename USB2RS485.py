@@ -2,13 +2,13 @@ import serial
 import time
 from datetime import datetime
 
-def read_serial_data(port='/dev/ttyCH341USB0', baudrate=9600, timeout=1, save_to_file=False):
+def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file=False):
     """
     Lee y muestra los datos recibidos desde un puerto serial específico.
     Detecta la finalización de un stream de bits y lo guarda en un archivo
     junto con un comentario que indique que el stream ha terminado.
     
-    :param port: El nombre del puerto serial, por defecto '/dev/ttyCH341USB0'.
+    :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
     :param baudrate: La velocidad en baudios, por defecto 9600.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
     :param save_to_file: Si es True, guarda los datos en un archivo de texto.
@@ -62,12 +62,12 @@ def read_serial_data(port='/dev/ttyCH341USB0', baudrate=9600, timeout=1, save_to
             hex_file.close()
             print(f"Datos guardados en {hex_filename}")
 
-def detect_baud_rate(port='/dev/ttyCH341USB0', timeout=1):
+def detect_baud_rate(port='/dev/ttyUSB0', timeout=1):
     """
     Intenta detectar la velocidad de transmisión de datos (baud rate) de un dispositivo serial.
     Guarda los resultados de las pruebas en un archivo de texto.
     
-    :param port: El nombre del puerto serial, por defecto '/dev/ttyCH341USB0'.
+    :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
     """
     baud_rates_to_test = [300, 1200, 2400, 4800, 9600]
@@ -108,13 +108,13 @@ def main_menu():
         choice = input("Selecciona una opción: ")
 
         if choice == '1':
-            port = input("Introduce el puerto serial (por defecto '/dev/ttyCH341USB0'): ") or '/dev/ttyCH341USB0'
+            port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
             baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
             save_option = input("¿Quieres guardar los datos en un archivo? (s/n): ").strip().lower()
             save_to_file = save_option == 's'
             read_serial_data(port, int(baudrate), save_to_file=save_to_file)
         elif choice == '2':
-            port = input("Introduce el puerto serial (por defecto '/dev/ttyCH341USB0'): ") or '/dev/ttyCH341USB0'
+            port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
             detect_baud_rate(port)
         elif choice == '3':
             print("Saliendo del programa.")
