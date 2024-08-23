@@ -1,6 +1,6 @@
 # TermostatoAC-Carrier
 
-[Español](README.md) Spanish Version
+[Español](README_es.md) 
 
 -----
 
