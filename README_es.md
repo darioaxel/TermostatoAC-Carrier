@@ -33,7 +33,14 @@ Aún se pueden encontrar las instrucciones de instalación y para el usuario en 
 
 Dentro del manual de instalación podemos encontrar la siguiente imágen, que nos permite entender como tratar los tres elementos de conexión:
 
-![Pins de conexión](./images/pins.jpg)
+![Pins de conexión](./images/pins.png)
+
+En este caso, nos encontramos con tan solo 3 pins de conexión:
+ * **P**: para Power con 12v
+ * **G**: para GND
+ * **C**: para la emisión de datos 
+
+El termostato emite cada X tiempo una serie de datos que son aquellos que queremos analizar para poder entender el funcionamiento del sistema. 
 
 ## Componentes a utilizar
 

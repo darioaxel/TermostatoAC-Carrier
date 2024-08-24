@@ -9,9 +9,6 @@
 - [TermostatoAC-Carrier](#termostatoac-carrier)
   - [Introduction](#introduction)
   - [Thermostat Description](#thermostat-description)
-  - [Components to Use](#components-to-use)
-  - [Software](#software)
-  - [Data Readings](#data-readings)
 
 -----
 
@@ -32,19 +29,8 @@ Installation and user manuals can still be found online. Here are two links to v
 
 Within the installation manual, we can find the following image, which helps us understand how to handle the three connection elements:
 
-![Connection Pins](./images/pins.jpg)
+![Connection Pins](./images/pins.png)
 
-## Components to Use
-
-## Software
-
-## Data Readings
-
-Below is a table indicating, for each thermostat state, the file that includes 4 complete readings of the stream received by the script.
-
-| Thermostat State | Fan | Temperature | Reading File |
-| --- | --- | --- | --- |
-| Off | * | * | [File](datos_hex_2024-08-23_17-21-54.txt) |
-| Heat | 1 | 24º | [File](datos_hex_2024-08-23_17-26-08.txt) |
-| Heat | 2 | 24º | [File](datos_hex_2024-08-23_17-27-53.txt) |
-| Fan | 1 | - | [File](datos_hex_2024-08-24_09-43-15.txt) |
+In this case, we only have 3 connection pins:
+ * **P**: for Power with 12v
+ * **G**: for G
