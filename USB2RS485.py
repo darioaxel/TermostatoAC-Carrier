@@ -98,12 +98,110 @@ def detect_baud_rate(port='/dev/ttyUSB0', timeout=1):
     
     print(f"Pruebas finalizadas. Los resultados se guardaron en {filename}")
 
+def measure_time_between_messages(port='/dev/ttyUSB0', baudrate=9600, timeout=1):
+    """
+    Mide el tiempo en milisegundos entre la recepción de mensajes en el puerto serial.
+    
+    :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
+    :param baudrate: La velocidad en baudios, por defecto 9600.
+    :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
+    """
+    try:
+        # Inicializa la conexión serial
+        with serial.Serial(port, baudrate, timeout=timeout) as ser:
+            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
+            
+            last_time = None
+            while True:
+                # Lee datos del puerto
+                data = ser.read(1024)  # Lee hasta 1024 bytes
+                if data:
+                    current_time = time.time()
+                    if last_time is not None:
+                        time_diff_ms = (current_time - last_time) * 1000  # Diferencia en milisegundos
+                        print(f"Tiempo entre mensajes: {time_diff_ms:.2f} ms")
+                    last_time = current_time
+                else:
+                    # Si no se reciben datos, se resetea el temporizador
+                    last_time = None
+    except serial.SerialException as e:
+        print(f"Error al abrir el puerto serial: {e}")
+    except KeyboardInterrupt:
+        print("Lectura interrumpida por el usuario.")
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+
+def calculate_message_size(port='/dev/ttyUSB0', baudrate=9600, timeout=1, inactivity_timeout=2):
+    """
+    Realiza 20 lecturas de mensajes completos desde el puerto serial basándose en un período de inactividad,
+    calcula el tamaño en bytes de cada uno, y guarda los resultados en un archivo si se recibieron datos.
+
+    :param port: El nombre del puerto serial, por defecto '/dev/ttyCH341USB0'.
+    :param baudrate: La velocidad en baudios, por defecto 9600.
+    :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
+    :param inactivity_timeout: El tiempo de inactividad en segundos que determina el final de un mensaje.
+    """
+    # Genera el nombre del archivo basado en la fecha y hora actuales
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"lecturas_de_tamaño_de_mensaje_{timestamp}.txt"
+    
+    try:
+        # Inicializa la conexión serial
+        with serial.Serial(port, baudrate, timeout=timeout) as ser:
+            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
+            print(f"Guardando resultados en el archivo: {filename}\n")
+
+            # Abre el archivo para escribir los resultados
+            with open(filename, 'w') as file:
+                valid_readings = 0
+                for i in range(20):
+                    print(f"Esperando el inicio del mensaje {i+1}/20...")
+                    message_data = bytearray()
+                    last_received_time = time.time()
+
+                    while True:
+                        data = ser.read(1024)  # Lee hasta 1024 bytes
+                        if data:
+                            message_data.extend(data)
+                            last_received_time = time.time()
+                        else:
+                            # Si no se reciben datos, verificar si hemos superado el inactivity_timeout
+                            current_time = time.time()
+                            if current_time - last_received_time > inactivity_timeout:
+                                # Se considera que el mensaje ha terminado si el tiempo de inactividad supera el límite
+                                break
+
+                    if message_data:
+                        # Calcula el tamaño del mensaje
+                        message_size = len(message_data)
+                        print(f"Tamaño del mensaje {i+1}: {message_size} bytes")
+
+                        # Escribe el resultado en el archivo con timestamp
+                        file.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Mensaje {i+1}: {message_size} bytes\n")
+                        valid_readings += 1
+                    else:
+                        print(f"No se recibieron datos para el mensaje {i+1}.")
+
+                if valid_readings == 0:
+                    print("No se recibieron datos en ninguna de las lecturas.")
+                else:
+                    print(f"\nLecturas completadas. {valid_readings} resultados válidos guardados en {filename}.")
+
+    except serial.SerialException as e:
+        print(f"Error al abrir el puerto serial: {e}")
+    except KeyboardInterrupt:
+        print("Lectura interrumpida por el usuario.")
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+
 def main_menu():
     while True:
         print("\n--- MENÚ PRINCIPAL ---")
         print("1. Leer datos del puerto serial")
         print("2. Detectar velocidad de transmisión (baud rate)")
-        print("3. Salir")
+        print("3. Medir tiempo entre mensajes")
+        print("4. Determinar tamaño del mensaje")
+        print("5. Salir")
 
         choice = input("Selecciona una opción: ")
 
@@ -117,6 +215,14 @@ def main_menu():
             port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
             detect_baud_rate(port)
         elif choice == '3':
+            port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
+            baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
+            measure_time_between_messages(port, int(baudrate))
+        elif choice == '4':
+            port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
+            baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
+            calculate_message_size(port, int(baudrate))
+        elif choice == '5':
             print("Saliendo del programa.")
             break
         else:

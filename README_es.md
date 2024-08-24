@@ -33,5 +33,6 @@ A continuación se incluye una tabla en la que se indica, para cada uno de los e
 | Estado del termostato | Ventilador | Temperatura | Fichero de lectura |
 | --- | --- | --- | --- |
 | Apagado | * | * | [Fichero](datos_hex_2024-08-23_17-21-54.txt) |
-| Encendido | Calor | 1 | 24º | [Fichero](datos_hex_2024-08-23_17-26-08.txt) |
-| Encendido | Calor | 2 | 24º | [Fichero](datos_hex_2024-08-23_17-27-53.txt) |
+| Calor | 1 | 24º | [Fichero](datos_hex_2024-08-23_17-26-08.txt) |
+| Calor | 2 | 24º | [Fichero](datos_hex_2024-08-23_17-27-53.txt) |
+| Ventilador| 1 | - | [Fichero](datos_hex_2024-08-24_09-43-15.txt) |
