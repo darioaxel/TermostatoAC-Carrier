@@ -21,6 +21,20 @@ Este proyecto pretende solucionar la falta de actualizaciones para el termostato
 
 ## Descripción del termostato
 
+Este proyecto trata con el termostato **CRC2-NTC** de Carrier. Se trata de un termostato obsoleto que la propia empresa ya no provee.
+
+![Termostato](./images/termostato.jpg)
+
+
+Aún se pueden encontrar las instrucciones de instalación y para el usuario en internet. Adjunto dos enlaces para verlas:
+
+[Manual de Instalación](https://www.manualslib.com/manual/2206657/Carrier-Crc2-Ntc.html)
+[Manual de Usuario](https://www.manualslib.com/manual/2206660/Carrier-Crc2-Ntc.html) 
+
+Dentro del manual de instalación podemos encontrar la siguiente imágen, que nos permite entender como tratar los tres elementos de conexión:
+
+![Pins de conexión](./images/pins.jpg)
+
 ## Componentes a utilizar
 
 ## Software

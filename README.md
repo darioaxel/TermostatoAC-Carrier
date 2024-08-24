@@ -1,4 +1,4 @@
-# TermostatoAC-Carrier# TermostatoAC-Carrier
+# TermostatoAC-Carrier
 
 [Español](README_es.md) Spanish Version
 
@@ -6,10 +6,12 @@
 
 **INDEX**
 
-- [TermostatoAC-Carrier# TermostatoAC-Carrier](#termostatoac-carrier-termostatoac-carrier)
+- [TermostatoAC-Carrier](#termostatoac-carrier)
   - [Introduction](#introduction)
+  - [Thermostat Description](#thermostat-description)
+  - [Components to Use](#components-to-use)
+  - [Software](#software)
   - [Data Readings](#data-readings)
-
 
 -----
 
@@ -17,10 +19,32 @@
 
 This project aims to address the lack of updates for the thermostat of a well-known American air conditioning brand by replacing it with a compatible device that also expands programming options, enables remote access, and provides a more modern interface.
 
+## Thermostat Description
+
+This project deals with the **CRC2-NTC** thermostat from Carrier. It is an obsolete thermostat that the company no longer provides.
+
+![Thermostat](./images/termostato.jpg)
+
+Installation and user manuals can still be found online. Here are two links to view them:
+
+[Installation Manual](https://www.manualslib.com/manual/2206657/Carrier-Crc2-Ntc.html)  
+[User Manual](https://www.manualslib.com/manual/2206660/Carrier-Crc2-Ntc.html)
+
+Within the installation manual, we can find the following image, which helps us understand how to handle the three connection elements:
+
+![Connection Pins](./images/pins.jpg)
+
+## Components to Use
+
+## Software
+
 ## Data Readings
 
 Below is a table indicating, for each thermostat state, the file that includes 4 complete readings of the stream received by the script.
 
-| Thermostat State | Temperature | Reading File |
-| --- | --- | --- |
-| Off |  |  |
+| Thermostat State | Fan | Temperature | Reading File |
+| --- | --- | --- | --- |
+| Off | * | * | [File](datos_hex_2024-08-23_17-21-54.txt) |
+| Heat | 1 | 24º | [File](datos_hex_2024-08-23_17-26-08.txt) |
+| Heat | 2 | 24º | [File](datos_hex_2024-08-23_17-27-53.txt) |
+| Fan | 1 | - | [File](datos_hex_2024-08-24_09-43-15.txt) |
