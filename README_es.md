@@ -44,6 +44,13 @@ El termostato emite cada X tiempo una serie de datos que son aquellos que querem
 
 ## Componentes a utilizar
 
+Para poder realizar las lecturas del termostato utilizo el siguiente adaptador:
+
+![RS485_adapter](./images/USB_R485_12v_adapter.png)
+
+Lo compré en Aliexpress en esta tienda [Adaptador USB to RS485](https://es.aliexpress.com/item/1005006111904749.html?spm=a2g0o.order_list.order_list_main.85.4fd6194dqfCvY1&gatewayAdapt=glo2esp)
+
+
 ## Software
 
 

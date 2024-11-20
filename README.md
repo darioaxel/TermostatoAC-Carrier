@@ -42,6 +42,11 @@ In this case, we only have 3 connection pins:
 The thermostat emits a series of data at regular intervals, which we want to analyze to understand how the system operates.
 
 ## Components to Use
+To perform thermostat readings, I use the following adapter:
+
+![RS485_adapter](./images/USB_R485_12v_adapter.png)
+
+I bought it on Aliexpress from this store: [USB to RS485 Adapter](https://es.aliexpress.com/item/1005006111904749.html?spm=a2g0o.order_list.order_list_main.85.4fd6194dqfCvY1&gatewayAdapt=glo2esp)
 
 ## Software
 
