@@ -78,21 +78,6 @@ def entrenar_datos(datos, resultados, epocas, num_datos, modelo):
     print("Datos: " + str(num_datos))
     return modelo.fit(datos, resultados,epochs=epocas) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
 
-def run(epocas):
-    
-    datos_entrenamiento, datos_prueba, metadatos = inicializar_datos('fashion_mnist')
-
-    num_entrenamiento = metadatos.splits['train'].num_examples
-    num_prueba = metadatos.splits['test'].num_examples
-    nombre_clases = metadatos.features['label'].names
-    print("Número de ejemplos de entrenamiento: {}".format(num_entrenamiento))
-    print("Número de ejemplos de prueba: {}".format(num_prueba))
-    print("Nombres de las clases: {}".format(nombre_clases))
-    modelo = init_modelo((28,28,1))
-    entrenar_datos(datos_entrenamiento, None, epocas, num_entrenamiento, modelo)
-
-    genera_predicciones(datos_prueba, modelo, nombre_clases) 
-
 
 def load_modelo(nombre_modelo):
     nombre_modelo = os.path.basename(nombre_modelo)
@@ -116,6 +101,3 @@ def save_modelo(modelo, nombre_modelo):
 
     modelo.save(nombre_modelo)
     print("Modelo guardado en %s" % nombre_modelo)
-
-if __name__ == "__main__":
-    run(50)
