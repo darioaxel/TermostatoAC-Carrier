@@ -34,7 +34,7 @@ def leer_fichero(file_name):
     total_data = []
     total_results = []
     with open(file_name, "r") as f:
-        print("recogiendo datos de %s" % file_name)
+        # print("recogiendo datos de %s" % file_name)
         data_crudo = f.read()
         datas = data_crudo.split("\n")[1:]
         for data in datas:
@@ -66,15 +66,18 @@ def recoger_dataset(folder = None):
     total_results = []
     folder_name = folder if folder else FOLDER_DUMPS
     print("Comprobando folder %s" % folder_name)
-
+    num_ficheros = 0
     for file in os.listdir(folder_name):
         nombre_fichero = os.path.join(folder_name, file)
-        print("Recogiendo datos de %s" % nombre_fichero)
+        if not nombre_fichero.endswith("csv"):
+            continue
+        num_ficheros += 1
+        # print("Recogiendo datos de %s" % nombre_fichero)
         data, results = leer_fichero(nombre_fichero)
         total_data.extend(data)
         total_results.extend(results)
     
-    print("recolectadas %d lineas" % len(total_data))
+    print("Recolectadas %d tramas de %s ficheros" % (len(total_data), num_ficheros))
 
     return crear_dataset(total_data, total_results)
 
@@ -89,7 +92,20 @@ def main():
         return
     
     accion = sys.argv[1]
-    if accion == "entrenar":  
+    if accion == "pesos":
+        for arg in sys.argv:
+            if arg.startswith("modelo="):
+                nombre_modelo = arg.split("=")[1]
+                modelo = ia_tools.load_modelo(nombre_modelo)
+                ia_tools.mostrar_pesos_modelo(modelo)
+            else:
+                pos = sys.argv.index(arg)
+                if pos < 2:
+                    continue
+                print("Argumento %s %s desconocido" % (pos, arg))
+            return
+
+    elif accion == "entrenar":  
 
         epocas = 100
         dataset_folder = None
@@ -124,7 +140,7 @@ def main():
         dataset = recoger_dataset(dataset_folder)
         result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)
         if save_modelo:
-            ia_tools.save_modelo(modelo, nombre_modelo if nombre_modelo else "modelo_%s_%s_%s_%s.keras" % (datetime.now().strftime("%Y%m%d_%H%M%S"), epocas, layers, neuronas))
+            ia_tools.save_modelo(modelo, "modelo_%s_%s_%s_%s.keras" % (datetime.now().strftime("%Y%m%d_%H%M%S"), epocas, layers, neuronas))
         graphics_tools.mostrar_graf(result)
     elif accion == "prediccion":
         
@@ -164,31 +180,6 @@ def main():
             return
 
         ia_tools.predecir(data_pred.take(1), modelo, LISTA_CLASES)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()
