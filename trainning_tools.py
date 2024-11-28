@@ -27,12 +27,31 @@ def calcular_predicciones(fichero):
     
     return crear_dataset(dataset, None)
 
-def normalizar_datos(datos):
+def normalizar_datos(datos, check_len=False):
+    if check_len:
+        len_ = len(datos)
+        if len_ == 88:
+            datos.insert(59, 0)
+            datos.insert(74, 0)
+            datos.insert(89, 0)
+        elif len_ == 85:
+            datos.insert(15, 0)
+            datos.insert(30, 0)
+            datos.insert(45, 0)
+            datos.insert(59, 0)
+            datos.insert(74, 0)
+            datos.insert(89, 0)
+        else:
+            if len_ != 91:
+                print("Tamaño de trama no válido (%s):%s" % (len_, datos))
+                return False
+
     return np.array([datos], dtype=np.float32)
 
 def leer_fichero(file_name):
     total_data = []
     total_results = []
+    print("Leyendo fichero %s" % file_name)
     with open(file_name, "r") as f:
         # print("recogiendo datos de %s" % file_name)
         data_crudo = f.read()
@@ -45,18 +64,18 @@ def leer_fichero(file_name):
             datos, resultado = data.split(";")
             datos_list = [int(dato) for dato in datos.split(",")]
             resultado_list = [float(dato) for dato in resultado.split(",")]
-            
-            while len(datos_list) < 91:
-                datos_list.append(0)
-            
+
             while len(resultado_list) < len(LISTA_CLASES):
                 resultado_list.append(0)
 
-            datos_list = normalizar_datos(datos_list)
+            datos_list = normalizar_datos(datos_list, True)
+            if datos_list is False:
+                print("Omitiendo linea de fichero %s" % file_name)
+                continue
+
             resultado_list = normalizar_datos(resultado_list)
             total_data.append(datos_list)
             total_results.append(resultado_list)
-    
     return total_data, total_results
 
 
@@ -105,7 +124,7 @@ def main():
                 print("Argumento %s %s desconocido" % (pos, arg))
             return
 
-    elif accion == "entrenar":  
+    if accion == "entrenar":  
 
         epocas = 100
         dataset_folder = None
@@ -171,7 +190,7 @@ def main():
         if nombre_fichero:
             data_pred = calcular_predicciones(nombre_fichero)
         elif trama:
-            trama = normalizar_datos(trama)
+            trama = normalizar_datos(trama, True)
             data = [np.array([trama], dtype=np.float32)]
             data_pred = crear_dataset(data, None)
 
