@@ -63,10 +63,13 @@ def predecir(trama, modelo, lista_clases):
     print("Predecir...", lista_clases)
     #trama = np.array(trama)
     prediccion = modelo.predict(trama)
+    posiciones=""
     for num, clase in enumerate(lista_clases):
-        print("%s : %s" % (clase, prediccion[0][num]))
+        pos = "ON" if prediccion[0][num] == 1.0 else "OFF"
+        posiciones += "1" if pos == "ON" else "0"
+        print("%s : %s" % (clase, pos))
     #nombre_clases[np.argmax(prediccion[0])]
-    print(prediccion)
+    print(posiciones)
 
 def entrenar_datos(datos, resultados, epocas, num_datos, modelo):
 
@@ -93,7 +96,10 @@ def run(epocas):
 
 def load_modelo(nombre_modelo):
     nombre_modelo = os.path.basename(nombre_modelo)
-    nombre_modelo_path = os.path.join(os.path.dirname(__file__), nombre_modelo)
+    if os.path.exists(nombre_modelo):
+        nombre_modelo_path = nombre_modelo
+    else:
+        nombre_modelo_path = os.path.join(os.path.dirname(__file__),'models', nombre_modelo)
     if not os.path.exists(nombre_modelo_path):
         print("No existe el modelo %s" % nombre_modelo_path)
         return None

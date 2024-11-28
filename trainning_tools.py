@@ -78,8 +78,8 @@ def recoger_dataset(folder = None):
 
     return crear_dataset(total_data, total_results)
 
-def recoger_modelo():
-    modelo = ia_tools.init_modelo((91,1))
+def recoger_modelo(layers_cnt=1, neuronas=10):
+    modelo = ia_tools.init_modelo(input_schema=(91,1), layers_cnt=int(layers_cnt),npc=int(neuronas))
     return modelo
 
 def main():
@@ -95,12 +95,18 @@ def main():
         dataset_folder = None
         nombre_modelo = None
         save_modelo = False
+        layers = 1
+        neuronas = 10
 
         for arg in sys.argv:
             if arg.startswith("epocas="):
                 epocas = int(arg.split("=")[1])
             elif arg.startswith("modelo="):
                 nombre_modelo = arg.split("=")[1]
+            elif arg.startswith("layers="):
+                layers = arg.split("=")[1]
+            elif arg.startswith("neuronas="):
+                neuronas = arg.split("=")[1]
             elif arg.startswith("dataset="):
                 dataset_folder = recoger_dataset(arg.split("=")[1])
             elif arg == "save":
@@ -113,7 +119,7 @@ def main():
                 return
    
 
-        modelo = ia_tools.load_modelo(nombre_modelo) if nombre_modelo else recoger_modelo()
+        modelo = ia_tools.load_modelo(nombre_modelo) if nombre_modelo else recoger_modelo(layers_cnt=layers, neuronas=neuronas)
 
         dataset = recoger_dataset(dataset_folder)
         result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)

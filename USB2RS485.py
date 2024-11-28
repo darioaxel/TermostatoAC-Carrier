@@ -23,7 +23,7 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=1, save_to_file
             
             if save_to_file:
                 timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-                hex_filename = os.path.abspath(os.path.join(os.path.dirname(__name__), "datos", f'datos_hex_{baudrate}_{"-".join(posiciones.split(","))}_{timestamp}.csv'))
+                hex_filename = os.path.abspath(os.path.join(os.path.dirname(__name__), "dumps", f'datos_hex_{baudrate}_{"-".join(posiciones.split(","))}_{timestamp}.csv'))
                 if not os.path.exists(os.path.dirname(hex_filename)):
                     os.makedirs(os.path.dirname(hex_filename))
                 hex_file = open(hex_filename, 'w')
@@ -222,7 +222,7 @@ def main_menu():
             save_to_file = save_option == 's' or not save_option
             posiciones = None
             if save_to_file:
-                posiciones = input("Introduce las posiciones de los 3 controles:\n\t* Ventilador: [0,0,0] -parado, [1,0,0] - mínimo, [0,1,0] - medio, [0,0,1] - maximo\n\t* Frio: 0,1\n\t* Calor: 0,1\n\t* Seco: 0,1\nEjemplo (Ventilador medio [0,1,0], Frio 1, Calor 0, Seco 0): 0,1,0,1,0,0\n:") or '0,0,0,0,0,0'
+                posiciones = input("Introduce las posiciones de los 3 controles:\n\t* Ventilador: [0,0,0] -parado, [1,0,0] - mínimo, [0,1,0] - medio, [0,0,1] - maximo\n\t* Frio: 0,1\n\t* Calor: 0,1\n\t* Seco: 0,1\nEjemplo (Ventilador medio [0,1,0], Frio 1, Calor 0, Seco 0): 010 1 0 0\n:") or '0,0,0,0,0,0'
                 if posiciones:
                     posiciones = posiciones.replace(" ", "")
                     if "," not in posiciones:
