@@ -31,15 +31,21 @@ def normalizar_datos(datos, check_len=False):
     if check_len:
         len_ = len(datos)
         if len_ == 85:
-            datos.insert(15, 0)
-            datos.insert(30, 0)
-            datos.insert(45, 0)
+            #datos.insert(15, 0)
+            #datos.insert(30, 0)
+            #datos.insert(45, 0)
+            datos.append(0)
+            datos.append(0)
+            datos.append(0)
         len_ = len(datos)
-        
+
         if len_ == 88:
-            datos.insert(59, 0)
-            datos.insert(74, 0)
-            datos.insert(89, 0)
+            #datos.insert(59, 0)
+            #datos.insert(74, 0)
+            #datos.insert(89, 0)
+            datos.append(0)
+            datos.append(0)
+            datos.append(0)
         else:
             if len_ != 91:
                 print("Tamaño de trama no válido (%s):%s" % (len_, datos))
