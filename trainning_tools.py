@@ -124,7 +124,7 @@ def main():
         dataset = recoger_dataset(dataset_folder)
         result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)
         if save_modelo:
-            ia_tools.save_modelo(modelo, nombre_modelo if nombre_modelo else "modelo_%s_%s.keras" % (datetime.now().strftime("%Y%m%d_%H%M%S"), epocas))
+            ia_tools.save_modelo(modelo, nombre_modelo if nombre_modelo else "modelo_%s_%s_%s_%s.keras" % (datetime.now().strftime("%Y%m%d_%H%M%S"), epocas, layers, neuronas))
         graphics_tools.mostrar_graf(result)
     elif accion == "prediccion":
         
