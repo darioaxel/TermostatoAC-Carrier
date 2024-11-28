@@ -1,15 +1,16 @@
 import serial
 import time
 from datetime import datetime
+import os
 
-def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file=False):
+def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=1, save_to_file=False, posiciones=""):
     """
     Lee y muestra los datos recibidos desde un puerto serial específico.
     Detecta la finalización de un stream de bits y lo guarda en un archivo
     junto con un comentario que indique que el stream ha terminado.
     
     :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
-    :param baudrate: La velocidad en baudios, por defecto 9600.
+    :param baudrate: La velocidad en baudios, por defecto 2400.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
     :param save_to_file: Si es True, guarda los datos en un archivo de texto.
     """
@@ -17,14 +18,18 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file
         # Inicializa la conexión serial
         with serial.Serial(port, baudrate, timeout=timeout) as ser:
             print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
+
+            hex_file = None
             
             if save_to_file:
                 timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-                hex_filename = f'datos_hex_{timestamp}.txt'
+                hex_filename = os.path.abspath(os.path.join(os.path.dirname(__name__), "datos", f'datos_hex_{baudrate}_{"-".join(posiciones.split(","))}_{timestamp}.csv'))
+                if not os.path.exists(os.path.dirname(hex_filename)):
+                    os.makedirs(os.path.dirname(hex_filename))
                 hex_file = open(hex_filename, 'w')
                 
                 # Escribe un comentario con la velocidad en baudios en el archivo hexadecimal
-                hex_file.write(f"# Velocidad en baudios: {baudrate}\n")
+                hex_file.write(f"Trama;Posiciones\n")
                 print(f"Guardando datos en {hex_filename}")
 
             stream_active = False
@@ -36,7 +41,8 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file
                 if data:
                     stream_active = True
                     # Convierte los datos a hexadecimal y los agrega al stream actual
-                    hex_data = ' '.join(f'{b:02x}' for b in data)
+                    # hex_data = ' '.join(f'{b:02x}' for b in data)
+                    hex_data = ','.join(str(b) for b in data)
                     stream_data.append(hex_data)
                     print(f"Recibido (hexadecimal): {hex_data}")
                 else:
@@ -44,8 +50,9 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file
                         # Si el stream estaba activo pero ya no hay más datos, finaliza el stream
                         if save_to_file:
                             # Escribe el stream completo en el archivo
-                            hex_file.write("\n".join(stream_data) + "\n")
-                            hex_file.write("# STREAM TERMINADO\n")
+                            total_data = ','.join(stream_data)
+                            hex_file.write(";".join([total_data, posiciones])+ "\n")
+                            # hex_file.write("# STREAM TERMINADO\n")
                         print("# STREAM TERMINADO")
                         
                         # Resetea para el siguiente stream
@@ -58,8 +65,11 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=9600, timeout=1, save_to_file
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
     finally:
-        if save_to_file:
-            hex_file.close()
+        if save_to_file: 
+            if hex_file:
+                hex_file.close()
+            else:
+                print("No se pudo guardar el archivo de datos.")
             print(f"Datos guardados en {hex_filename}")
 
 def detect_baud_rate(port='/dev/ttyUSB0', timeout=1):
@@ -98,12 +108,12 @@ def detect_baud_rate(port='/dev/ttyUSB0', timeout=1):
     
     print(f"Pruebas finalizadas. Los resultados se guardaron en {filename}")
 
-def measure_time_between_messages(port='/dev/ttyUSB0', baudrate=9600, timeout=1):
+def measure_time_between_messages(port='/dev/ttyUSB0', baudrate=2400, timeout=1):
     """
     Mide el tiempo en milisegundos entre la recepción de mensajes en el puerto serial.
     
     :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
-    :param baudrate: La velocidad en baudios, por defecto 9600.
+    :param baudrate: La velocidad en baudios, por defecto 2400.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
     """
     try:
@@ -131,13 +141,13 @@ def measure_time_between_messages(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
 
-def calculate_message_size(port='/dev/ttyUSB0', baudrate=9600, timeout=1, inactivity_timeout=2):
+def calculate_message_size(port='/dev/ttyUSB0', baudrate=2400, timeout=1, inactivity_timeout=2):
     """
     Realiza 20 lecturas de mensajes completos desde el puerto serial basándose en un período de inactividad,
     calcula el tamaño en bytes de cada uno, y guarda los resultados en un archivo si se recibieron datos.
 
     :param port: El nombre del puerto serial, por defecto '/dev/ttyCH341USB0'.
-    :param baudrate: La velocidad en baudios, por defecto 9600.
+    :param baudrate: La velocidad en baudios, por defecto 2400.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
     :param inactivity_timeout: El tiempo de inactividad en segundos que determina el final de un mensaje.
     """
@@ -207,20 +217,28 @@ def main_menu():
 
         if choice == '1':
             port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
-            baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
-            save_option = input("¿Quieres guardar los datos en un archivo? (s/n): ").strip().lower()
-            save_to_file = save_option == 's'
-            read_serial_data(port, int(baudrate), save_to_file=save_to_file)
+            baudrate = input("Introduce la velocidad en baudios (por defecto 2400): ") or '2400'
+            save_option = input("¿Quieres guardar los datos en un archivo? (S/n): ").strip().lower()
+            save_to_file = save_option == 's' or not save_option
+            posiciones = None
+            if save_to_file:
+                posiciones = input("Introduce las posiciones de los 3 controles:\n\t* Ventilador: [0,0,0] -parado, [1,0,0] - mínimo, [0,1,0] - medio, [0,0,1] - maximo\n\t* Frio: 0,1\n\t* Calor: 0,1\n\t* Seco: 0,1\nEjemplo (Ventilador medio [0,1,0], Frio 1, Calor 0, Seco 0): 0,1,0,1,0,0\n:") or '0,0,0,0,0,0'
+                if posiciones:
+                    posiciones = posiciones.replace(" ", "")
+                    if "," not in posiciones:
+                        posiciones = ",".join(posiciones.split())
+            
+            read_serial_data(port, int(baudrate), save_to_file=save_to_file, posiciones=posiciones)
         elif choice == '2':
             port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
             detect_baud_rate(port)
         elif choice == '3':
             port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
-            baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
+            baudrate = input("Introduce la velocidad en baudios (por defecto 2400): ") or '2400'
             measure_time_between_messages(port, int(baudrate))
         elif choice == '4':
             port = input("Introduce el puerto serial (por defecto '/dev/ttyUSB0'): ") or '/dev/ttyUSB0'
-            baudrate = input("Introduce la velocidad en baudios (por defecto 9600): ") or '9600'
+            baudrate = input("Introduce la velocidad en baudios (por defecto 2400): ") or '2400'
             calculate_message_size(port, int(baudrate))
         elif choice == '5':
             print("Saliendo del programa.")
