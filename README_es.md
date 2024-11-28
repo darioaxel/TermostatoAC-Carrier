@@ -92,10 +92,9 @@ python3 trainning_tools.py entrenar epocas=20000
 python3 trainning_tools.py prediccion modelo=models/modelo_20241128_120059_10.keras trama=0,0,8,8,97,9...
 ```
  * modelo=. Fichero del modelo entrenado que vamos a usar para la predicción.
- * fichero=. Opcional. Fichero con varias tramas para generar varias predicciones.
  * trama=. Opcional. Trama a hacer predicción.
 
- 
+
  
  
   

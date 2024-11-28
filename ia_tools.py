@@ -67,7 +67,7 @@ def predecir(trama, modelo, lista_clases):
     for num, clase in enumerate(lista_clases):
         pos = "ON" if prediccion[0][num] == 1.0 else "OFF"
         posiciones += "1" if pos == "ON" else "0"
-        print("%s : %s" % (clase, pos))
+        print("%s : %s (accuracy:%s)" % (clase, pos, prediccion[0][num]))
     #nombre_clases[np.argmax(prediccion[0])]
     print(posiciones)
 

@@ -136,8 +136,6 @@ def main():
             print("*%s" % arg)
             if arg.startswith("modelo="):
                 nombre_modelo = arg.split("=")[1]
-            elif arg.startswith("fichero="):
-                nombre_fichero = arg.split("=")[1]
             elif arg.startswith("trama="):
                 trama = arg.split("=")[1].split(",")
                 trama = [int(t) for t in trama]
@@ -164,11 +162,8 @@ def main():
         if not data_pred:
             print("No se ha especificado un fichero o una trama")
             return
-        
+
         ia_tools.predecir(data_pred.take(1), modelo, LISTA_CLASES)
-        """ for num, dato_ in enumerate(data_pred.as_numpy_iterator()):
-            print("Prediciendo %d" % (num + 1))
-            ia_tools.predecir(dato_, modelo, LISTA_CLASES) """
 
 
 
