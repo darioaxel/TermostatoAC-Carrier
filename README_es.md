@@ -38,7 +38,7 @@ Dentro del manual de instalación podemos encontrar la siguiente imágen, que no
 En este caso, nos encontramos con tan solo 3 pins de conexión:
  * **P**: para Power con 12v
  * **G**: para GND
- * **C**: para la emisión de datos 
+ * **C**: para la emisión de datos --> a la entrada B- del adaptador.
 
 El termostato emite cada X tiempo una serie de datos que son aquellos que queremos analizar para poder entender el funcionamiento del sistema. 
 
@@ -53,14 +53,52 @@ Lo compré en Aliexpress en esta tienda [Adaptador USB to RS485](https://es.alie
 
 ## Software
 
+### Permisos dispositivo
+Para acceder al dispositivo USB sin sudo es necesario ejecutar el siguiente comando:
+sudo usermod -a -G dialout **username**
+
 
 ## Lecturas de datos
+Las lecturas se generarán en la carpeta dumps.
+Usaremos el comando:
+```
+python3 USB2RS485.py
+```
+![Consola1](./images/consola1.png)
 
-A continuación se incluye una tabla en la que se indica, para cada uno de los estados del termostato, el fichero que incluye 4 lecturas completas del stream que se ha recibido el script.
+## Entrenamiento IA.
 
-| Estado del termostato | Ventilador | Temperatura | Fichero de lectura |
-| --- | --- | --- | --- |
-| Apagado | * | * | [Fichero](datos_hex_2024-08-23_17-21-54.txt) |
-| Calor | 1 | 24º | [Fichero](datos_hex_2024-08-23_17-26-08.txt) |
-| Calor | 2 | 24º | [Fichero](datos_hex_2024-08-23_17-27-53.txt) |
-| Ventilador| 1 | - | [Fichero](datos_hex_2024-08-24_09-43-15.txt) |
+Cuando ya tengas suficientes ficheros en dumps, puedes empezar a entrenar a tu IA.
+```
+python3 trainning_tools.py entrenar epocas=20000
+```
+Las opciones disponibles son:
+ - entrenar: Permite entrenar un modelo.
+ - prediccion: Se facilita una trama o fichero e intenta predecir el estado.
+
+ ### Entrenar.
+ ```
+python3 trainning_tools.py entrenar epocas=20000
+```
+ * epocas=. Son las epocas a cursar.
+ * modelo=. Opcional. Se especifica un fichero que continee un modelo entrenado.Si el modelo no se especica, se crea uno nuevo.
+ * dataset=. Opcional. Carpeta que contienen los dumps a usar como entreno.Si el modelo no se especifica se usa carpeta dums.
+ * layers=. Opcional. Numero de capas cuando el modelo es nuevo. Por defecto 1.
+ * neuronas=. Optional. Numero de neuronas en capas intermedias. Por defecto 10.
+ * save. Opcional. Guarda el modelo entrenado en la carpeta models.
+
+ ### Prediccion
+ ```
+python3 trainning_tools.py prediccion modelo=models/modelo_20241128_120059_10.keras trama=0,0,8,8,97,9...
+```
+ * modelo=. Fichero del modelo entrenado que vamos a usar para la predicción.
+ * fichero=. Opcional. Fichero con varias tramas para generar varias predicciones.
+ * trama=. Opcional. Trama a hacer predicción.
+
+ 
+ 
+ 
+  
+
+
+

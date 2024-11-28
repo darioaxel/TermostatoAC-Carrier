@@ -37,7 +37,7 @@ Within the installation manual, we can find the following image, which helps us 
 In this case, we only have 3 connection pins:
  * **P**: for Power with 12v
  * **G**: for GND
- * **C**: for data transmission
+ * **C**: for data transmission --> to B- adaptator entry
 
 The thermostat emits a series of data at regular intervals, which we want to analyze to understand how the system operates.
 
