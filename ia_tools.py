@@ -1,6 +1,3 @@
-
-from graphics_tools import genera_predicciones
-
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import math
@@ -71,12 +68,12 @@ def predecir(trama, modelo, lista_clases):
     #nombre_clases[np.argmax(prediccion[0])]
     print(posiciones)
 
-def entrenar_datos(datos, resultados, epocas, num_datos, modelo):
+def entrenar_datos(datos, resultados, epocas, num_datos, modelo, verb=True):
 
-    print("Entrenando modelo...")
-    print("Épocas: %d" % epocas)
-    print("Datos: " + str(num_datos))
-    return modelo.fit(datos, resultados,epochs=epocas) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
+    print("Entrenando modelo durante %d epocas ..." % (epocas))
+    result = modelo.fit(datos, resultados,epochs=epocas, verbose=verb) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
+    print("Entrenamiento finalizado")
+    return result
 
 
 def load_modelo(nombre_modelo):
