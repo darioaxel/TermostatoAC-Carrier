@@ -75,6 +75,7 @@ python3 trainning_tools.py entrenar epocas=20000
 Las opciones disponibles son:
  - entrenar: Permite entrenar un modelo.
  - prediccion: Se facilita una trama o fichero e intenta predecir el estado.
+ - pesos: Permite ver los pesos de las capas de un modelo dado.
 
  ### Entrenar.
  ```
@@ -94,7 +95,11 @@ python3 trainning_tools.py prediccion modelo=models/modelo_20241128_120059_10.ke
  * modelo=. Fichero del modelo entrenado que vamos a usar para la predicción.
  * trama=. Opcional. Trama a hacer predicción.
 
-
+ ### Pesos
+ ```
+python3 trainning_tools.py pesos modelo=models/modelo_20241128_181942_0000_0_00.keras
+```
+* modelo=. Fichero del modelo que queremos observar.
  
  
   

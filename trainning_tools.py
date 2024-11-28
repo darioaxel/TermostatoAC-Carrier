@@ -92,7 +92,20 @@ def main():
         return
     
     accion = sys.argv[1]
-    if accion == "entrenar":  
+    if accion == "pesos":
+        for arg in sys.argv:
+            if arg.startswith("modelo="):
+                nombre_modelo = arg.split("=")[1]
+                modelo = ia_tools.load_modelo(nombre_modelo)
+                ia_tools.mostrar_pesos_modelo(modelo)
+            else:
+                pos = sys.argv.index(arg)
+                if pos < 2:
+                    continue
+                print("Argumento %s %s desconocido" % (pos, arg))
+            return
+
+    elif accion == "entrenar":  
 
         epocas = 100
         dataset_folder = None

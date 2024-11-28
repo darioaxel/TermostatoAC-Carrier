@@ -98,3 +98,22 @@ def save_modelo(modelo, nombre_modelo):
 
     modelo.save(nombre_modelo)
     print("Modelo guardado en %s" % nombre_modelo)
+
+def mostrar_pesos_modelo(modelo):
+    print("Mostrando pesos de la red neuronal")
+    for num,capa in enumerate(modelo.layers):
+        print("Capa", num)
+        print(capa.get_weights())
+        print("----")
+        print(capa.get_config())
+        if hasattr(capa, "output_shape"):
+            print("----")
+            print(capa.output_shape)
+
+        if hasattr(capa, "input_shape"):
+            print("----")
+            print(capa.input_shape)
+        
+        print("----")
+        print(capa.output)
+        print("\n\n")
