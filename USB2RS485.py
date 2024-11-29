@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 import os
 
-def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=1, save_to_file=False, posiciones=""):
+def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=2, save_to_file=False, posiciones=""):
     """
     Lee y muestra los datos recibidos desde un puerto serial específico.
     Detecta la finalización de un stream de bits y lo guarda en un archivo
@@ -37,23 +37,30 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=1, save_to_file
 
             while True:
                 # Lee datos del puerto
-                data = ser.read(1024)  # Lee hasta 1024 bytes
+                data = ser.read(10240)  # Lee hasta 1024 bytes
                 if data:
                     stream_active = True
                     # Convierte los datos a hexadecimal y los agrega al stream actual
                     # hex_data = ' '.join(f'{b:02x}' for b in data)
-                    hex_data = ','.join(str(b) for b in data)
-                    stream_data.append(hex_data)
-                    print(f"Recibido (hexadecimal): {hex_data}")
+                    dec_data = ','.join(str(b) for b in data)
+                    stream_data.append(dec_data)
+                    print(f"Recibido (decimal): {dec_data} ({len(data)} bytes)")
                 else:
                     if stream_active:
                         # Si el stream estaba activo pero ya no hay más datos, finaliza el stream
                         if save_to_file:
                             # Escribe el stream completo en el archivo
                             total_data = ','.join(stream_data)
-                            hex_file.write(";".join([total_data, posiciones])+ "\n")
+                            total_bytes = len(total_data.split(","))
+
+                            if not total_data.startswith("0,0"):
+                                print("Trama inválida (No comienza por 0,0)",total_data)
+                            elif total_bytes not in [88,91]:
+                                print("Trama inválida (No tiene 88 o 91 bytes):", total_data)
+                            else:
+                                hex_file.write(";".join([total_data, posiciones])+ "\n")
                             # hex_file.write("# STREAM TERMINADO\n")
-                        print("# STREAM TERMINADO")
+                        print("# STREAM TERMINADO %s bytes" % (total_bytes))
                         
                         # Resetea para el siguiente stream
                         stream_active = False
