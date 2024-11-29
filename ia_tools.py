@@ -33,14 +33,14 @@ def normalizar(datos, tipos):
     return datos, tipos
 
 
-def init_modelo(input_schema, output_shapes=6, npc=10, layers_cnt=3, opt=0.00001):
+def init_modelo(input_schema, output_shapes=6, layers=[10,10,10], opt=0.00001):
     print("Inicializando modelo...")
 
     layers_list = []
     layers_list.append(tf.keras.layers.Flatten(input_shape=input_schema)) # 91, 1, 1 - blanco y negro
-    for num in range(layers_cnt):
+    for layer in layers:
         #print("*  +++ add Layer %d" % num)
-        layers_list.append(tf.keras.layers.Dense(npc, activation=tf.nn.relu))
+        layers_list.append(tf.keras.layers.Dense(int(layer), activation=tf.nn.relu))
     
     #layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.relu))
     layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.sigmoid))
@@ -99,6 +99,14 @@ def save_modelo(modelo, nombre_modelo):
     modelo.save(nombre_modelo)
     print("Modelo guardado en %s" % nombre_modelo)
 
+def recoge_datos_modelo(modelo):
+    layers = []
+    epocas = None
+    for capa in modelo.layers:
+        layers.append(str(capa.output.shape[1]))
+
+    return epocas, layers
+
 def mostrar_pesos_modelo(modelo):
     print("Mostrando pesos de la red neuronal")
     for num,capa in enumerate(modelo.layers):
@@ -117,3 +125,4 @@ def mostrar_pesos_modelo(modelo):
         print("----")
         print(capa.output)
         print("\n\n")
+        
