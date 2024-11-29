@@ -23,9 +23,11 @@ def crear_dataset(datas, results):
 def calcular_predicciones(fichero):
     fichero_path = os.path.join(os.path.dirname(__file__), fichero)
     dataset, resultset = leer_fichero(fichero_path)
-
+    lista_predicciones = []
+    for data in dataset:
+        lista_predicciones.append(crear_dataset([data], None))
     
-    return crear_dataset(dataset, None)
+    return lista_predicciones
 
 def normalizar_datos(datos, check_len=False):
     if check_len:
@@ -105,9 +107,8 @@ def recoger_dataset(folder = None):
 
     return crear_dataset(total_data, total_results)
 
-def recoger_modelo(layers_cnt=1, neuronas=10):
-    modelo = ia_tools.init_modelo(input_schema=(91,1), layers_cnt=int(layers_cnt),npc=int(neuronas))
-    return modelo
+def recoger_modelo(layers):
+    return ia_tools.init_modelo(input_schema=(91,1), layers=layers, output_shapes=6)
 
 def main():
     # recogemos argumentos
@@ -131,12 +132,12 @@ def main():
 
     if accion == "entrenar":  
 
-        epocas = 100
+        epocas = None
         dataset_folder = None
         nombre_modelo = None
         save_modelo = False
-        layers = 1
-        neuronas = 10
+        layers = None
+        neuronas = None
 
         for arg in sys.argv:
             if arg.startswith("epocas="):
@@ -144,9 +145,7 @@ def main():
             elif arg.startswith("modelo="):
                 nombre_modelo = arg.split("=")[1]
             elif arg.startswith("layers="):
-                layers = arg.split("=")[1]
-            elif arg.startswith("neuronas="):
-                neuronas = arg.split("=")[1]
+                layers = arg.split("=")[1].split(",")
             elif arg.startswith("dataset="):
                 dataset_folder = recoger_dataset(arg.split("=")[1])
             elif arg == "save":
@@ -157,14 +156,24 @@ def main():
                     continue
                 print("Argumento %s %s desconocido" % (pos, arg))
                 return
-   
 
-        modelo = ia_tools.load_modelo(nombre_modelo) if nombre_modelo else recoger_modelo(layers_cnt=layers, neuronas=neuronas)
+        if not epocas:
+            epocas = 1000
+        
+        if not layers:
+            layers = [10]
+
+
+        modelo = ia_tools.load_modelo(nombre_modelo) if nombre_modelo else recoger_modelo(layers=layers)
 
         dataset = recoger_dataset(dataset_folder)
         result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)
         if save_modelo:
-            ia_tools.save_modelo(modelo, "modelo_%s_%s_%s_%s.keras" % (datetime.now().strftime("%Y%m%d_%H%M%S"), epocas, layers, neuronas))
+            epocas_entrenadas, layers_modelo = ia_tools.recoge_datos_modelo(modelo)
+            if not epocas_entrenadas:
+                epocas_entrenadas = epocas
+            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ia_tools.save_modelo(modelo, "modelo__%s__%s_%s.keras" % ("_".join(layers_modelo), epocas_entrenadas, time_stamp))
         graphics_tools.mostrar_graf(result)
     elif accion == "prediccion":
         
@@ -176,6 +185,8 @@ def main():
             print("*%s" % arg)
             if arg.startswith("modelo="):
                 nombre_modelo = arg.split("=")[1]
+            elif arg.startswith("fichero="):
+                nombre_fichero = arg.split("=")[1]
             elif arg.startswith("trama="):
                 trama = arg.split("=")[1].split(",")
                 trama = [int(t) for t in trama]
@@ -192,18 +203,29 @@ def main():
 
         modelo = ia_tools.load_modelo(nombre_modelo)
         data_pred = None
+
+        lista_tramas = []
+
         if nombre_fichero:
-            data_pred = calcular_predicciones(nombre_fichero)
+            print("Nombre fichero %s" % nombre_fichero)
+            lista_tramas = calcular_predicciones(nombre_fichero)
         elif trama:
             trama = normalizar_datos(trama, True)
             data = [np.array([trama], dtype=np.float32)]
             data_pred = crear_dataset(data, None)
+            lista_tramas.append(data_pred)
 
-        if not data_pred:
+        if not lista_tramas:
             print("No se ha especificado un fichero o una trama")
             return
 
-        ia_tools.predecir(data_pred.take(1), modelo, LISTA_CLASES)
+        print("Procesando %s predicciones" % len(lista_tramas))
+        for trama_ in lista_tramas:
+            ia_tools.predecir(trama_.take(1), modelo, LISTA_CLASES)
+
+    else:
+        print("Acción %s desconocida" % accion)
+        return
 
 if __name__ == "__main__":
     main()

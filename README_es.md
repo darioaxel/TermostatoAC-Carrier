@@ -79,13 +79,12 @@ Las opciones disponibles son:
 
  ### Entrenar.
  ```
-python3 trainning_tools.py entrenar epocas=20000
+python3 trainning_tools.py entrenar epocas=20000 layers=10,8
 ```
  * epocas=. Son las epocas a cursar.
  * modelo=. Opcional. Se especifica un fichero que continee un modelo entrenado.Si el modelo no se especica, se crea uno nuevo.
  * dataset=. Opcional. Carpeta que contienen los dumps a usar como entreno.Si el modelo no se especifica se usa carpeta dums.
- * layers=. Opcional. Numero de capas cuando el modelo es nuevo. Por defecto 1.
- * neuronas=. Optional. Numero de neuronas en capas intermedias. Por defecto 10.
+ * layers=. Opcional. Numero de neuronas para cada capa, separado por comas,  cuando el modelo es nuevo. Por defecto 1 capa de 10.
  * save. Opcional. Guarda el modelo entrenado en la carpeta models.
 
  ### Prediccion
