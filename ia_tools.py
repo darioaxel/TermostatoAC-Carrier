@@ -33,7 +33,7 @@ def normalizar(datos, tipos):
     return datos, tipos
 
 
-def init_modelo(input_schema, output_shapes=6, layers=[10,10,10], opt=0.00001):
+def init_modelo(input_schema, output_shapes=6, layers=[10,10,10], opt=0.0001):
     print("Inicializando modelo...")
 
     layers_list = []
