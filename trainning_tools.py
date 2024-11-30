@@ -29,29 +29,10 @@ def calcular_predicciones(fichero):
     
     return lista_predicciones
 
-def normalizar_datos(datos, check_len=False):
-    if check_len:
-        len_ = len(datos)
-        if len_ == 85:
-            #datos.insert(15, 0)
-            #datos.insert(30, 0)
-            #datos.insert(45, 0)
-            datos.append(0)
-            datos.append(0)
-            datos.append(0)
-        len_ = len(datos)
-
-        if len_ == 88:
-            #datos.insert(59, 0)
-            #datos.insert(74, 0)
-            #datos.insert(89, 0)
-            datos.append(0)
-            datos.append(0)
-            datos.append(0)
-        else:
-            if len_ != 91:
-                print("Tamaño de trama no válido (%s):%s" % (len_, datos))
-                return False
+def normalizar_datos(datos, check_size = False):
+    if check_size and len(datos) != 91:
+        print("Datos incorrectos, no tiene 91 elementos")
+        return False
 
     return np.array([datos], dtype=np.float32)
 
@@ -70,7 +51,12 @@ def leer_fichero(file_name):
 
             datos, resultado = data.split(";")
             datos_list = [int(dato) for dato in datos.split(",")]
-            resultado_list = [float(dato) for dato in resultado.split(",")]
+
+            resultado_list = resultado.split(",")
+            while len(resultado_list) < 8:
+                resultado_list.insert(0, "0")
+            byte_value = int("".join(resultado_list), 2)
+            resultado_list = [byte_value]
 
             while len(resultado_list) < len(LISTA_CLASES):
                 resultado_list.append(0)
@@ -108,7 +94,7 @@ def recoger_dataset(folder = None):
     return crear_dataset(total_data, total_results)
 
 def recoger_modelo(layers):
-    return ia_tools.init_modelo(input_schema=(91,1), layers=layers, output_shapes=6)
+    return ia_tools.init_modelo(input_schema=(91,1), layers=layers, output_shapes=1)
 
 def main():
     # recogemos argumentos

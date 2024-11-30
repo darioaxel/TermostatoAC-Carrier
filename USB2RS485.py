@@ -37,7 +37,7 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=2, save_to_file
 
             while True:
                 # Lee datos del puerto
-                data = ser.read(10240)  # Lee hasta 1024 bytes
+                data = ser.readline()
                 if data:
                     stream_active = True
                     # Convierte los datos a hexadecimal y los agrega al stream actual
@@ -55,8 +55,8 @@ def read_serial_data(port='/dev/ttyUSB0', baudrate=2400, timeout=2, save_to_file
 
                             if not total_data.startswith("0,0"):
                                 print("Trama inválida (No comienza por 0,0)",total_data)
-                            elif total_bytes not in [88,91]:
-                                print("Trama inválida (No tiene 88 o 91 bytes):", total_data)
+                            elif total_bytes not in [85,88,91,94]:
+                                print("Trama inválida (No tiene 85,88,91 o 94 bytes):", total_data)
                             else:
                                 hex_file.write(";".join([total_data, posiciones])+ "\n")
                             # hex_file.write("# STREAM TERMINADO\n")
