@@ -33,8 +33,11 @@ def normalizar(datos, tipos):
     return datos, tipos
 
 
-def init_modelo(input_schema, output_shapes=6, layers=[10,10,10], opt=0.0001):
+def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.001):
     print("Inicializando modelo...")
+    print("Input schema: %s" % str(input_schema))
+    print("Output shapes: %s" % str(output_shapes))
+    print("Layers: %s" % str(layers))
 
     layers_list = []
     layers_list.append(tf.keras.layers.Flatten(input_shape=input_schema)) # 91, 1, 1 - blanco y negro
@@ -60,17 +63,36 @@ def predecir(trama, modelo, lista_clases):
     print("Predecir...", lista_clases)
     #trama = np.array(trama)
     prediccion = modelo.predict(trama)
-    posiciones=""
+    print(prediccion)
+    str_val = bin(int(prediccion[0][0]))[2:].zfill(8)
+    for control in ["FAN","COLD","DRY","HOT"]:
+        val = "OFF"
+        if control == "FAN":
+            sub_str = str_val[2:5]
+            val =  "1" if sub_str == "100" else "2" if sub_str == "010" else "3" if sub_str == "001" else "0"
+        elif control == "COLD":
+            val = "ON" if str_val[5] == "1" else "OFF"
+        elif control == "DRY":
+            val = "ON" if str_val[6] == "1" else "OFF"
+        elif control == "HOT":
+            val = "ON" if str_val[7] == "1" else "OFF"
+        else:
+            val = "???"
+        print("%s: %s" % (control, val))
+    """ posiciones=""
     for num, clase in enumerate(lista_clases):
         pos = "ON" if prediccion[0][num] == 1.0 else "OFF"
         posiciones += "1" if pos == "ON" else "0"
         print("%s : %s (accuracy:%s)" % (clase, pos, prediccion[0][num]))
     #nombre_clases[np.argmax(prediccion[0])]
-    print(posiciones)
+    print(posiciones) """
+
 
 def entrenar_datos(datos, resultados, epocas, num_datos, modelo, verb=True):
 
     print("Entrenando modelo durante %d epocas ..." % (epocas))
+    print("Datos: %d" % num_datos)
+    print("*", modelo)
     result = modelo.fit(datos, resultados,epochs=epocas, verbose=verb) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
     print("Entrenamiento finalizado")
     return result
