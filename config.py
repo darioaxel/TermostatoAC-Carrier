@@ -13,6 +13,7 @@ def cargar_configuracion():
         config.set('CONFIG', 'tramafile', 'dumps/trama.bin')
         config.set('CONFIG', 'posiciones', '000000')
         config.set('CONFIG', 'savefile', 's')
+        config.set('CONFIG', 'timeout', 0.1)
         guardar_configuracion(config)
 
     return config
@@ -32,3 +33,5 @@ def actualizar_configuracion(data):
         config.set('CONFIG', key, val)
     if updated:
         guardar_configuracion(config)
+
+CONFIG = cargar_configuracion()

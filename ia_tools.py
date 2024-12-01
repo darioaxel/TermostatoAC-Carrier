@@ -3,9 +3,19 @@ import tensorflow_datasets as tfds
 import os
 import config as config_mod
 
-CONFIG = config_mod.cargar_configuracion()
+
 
 TAMANO_LOTE = 10
+
+def preprocess_fn(data, result):
+    return data, result
+
+def crear_dataset(datas, results):
+
+    dataset = tf.data.Dataset.from_tensor_slices((datas, results))
+    dataset.map(preprocess_fn)
+
+    return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
 def inicializar_dataset(nombre):
     datos, metadatatos = tfds.load(nombre, with_info=True, as_supervised=True)
@@ -104,7 +114,7 @@ def load_modelo(nombre_modelo):
     if os.path.exists(nombre_modelo):
         nombre_modelo_path = nombre_modelo
     else:
-        nombre_modelo_path = os.path.join(os.path.dirname(__file__),CONFIG.get(section='CONFIG', option='modelsfolder'), nombre_modelo)
+        nombre_modelo_path = os.path.join(os.path.dirname(__file__),config_mod.CONFIG.get(section='CONFIG', option='modelsfolder'), nombre_modelo)
     if not os.path.exists(nombre_modelo_path):
         print("No existe el modelo %s" % nombre_modelo_path)
         return None
@@ -114,7 +124,7 @@ def load_modelo(nombre_modelo):
 
 def save_modelo(modelo, nombre_modelo):
     nombre_modelo = os.path.basename(nombre_modelo)
-    folder_modelos = os.path.join(os.path.dirname(__file__), CONFIG.get(section='CONFIG', option='modelsfolder'))
+    folder_modelos = os.path.join(os.path.dirname(__file__), config_mod.CONFIG.get(section='CONFIG', option='modelsfolder'))
     if not os.path.exists(folder_modelos):
         os.mkdir(folder_modelos)
     nombre_modelo = os.path.join(folder_modelos, nombre_modelo)

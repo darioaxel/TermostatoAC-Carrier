@@ -4,40 +4,31 @@ from datetime import datetime
 import os
 import config as config_mod
 import trama_tools
-from typing import Union
-DEFAULT_TIMEOUT = 0.2
+import json
+from typing import Union, Optional, List
 
-def enviar_trama(port:str, baudrate:int, timeout:Union[float,int], fichero:str, repeticiones:int, intervalo: int = 5):
+
+
+
+
+def enviar_trama(port:str, baudrate:int, timeout:Union[float,int], file_name:str, repeticiones:int, intervalo: int = 5):
     """
     Envía una trama de datos a través de un puerto serial específico.
 
     :param port: El nombre del puerto serial, por defecto '/dev/ttyUSB0'.
     :param baudrate: La velocidad en baudios, por defecto 2400.
     :param timeout: El tiempo de espera en segundos para la lectura del puerto, por defecto 1 segundo.
-    :param fichero: Fichero de contien la trama a enviar
+    :param file_name: Fichero de contien la trama a enviar
     """
     try:
         with serial.Serial(port, baudrate, timeout=timeout) as ser:
             print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
-            print("Leyendo fichero", fichero)
-            if not os.path.exists(fichero):
-                print("No existe el fichero %s" % fichero)
-                return
-            with open(fichero, "r") as f:
-                trama = f.read()
-        
-            trama_proccessed = trama_tools.pre_proccess_trama(trama, "%s.time" % fichero)
             i = 0
-            while i < repeticiones:
-                print("Envio", i,"de", repeticiones)
-                i += 1
-                for num, linea in enumerate([b"".join(linea) for linea in trama_proccessed]):
-                    trama = linea[0]
-                    sleep_time = linea[1]
-                    ser.write(trama)
-                    time.sleep(sleep_time)
-                print("Esperando %s segundos ..." % (intervalo))
-                time.sleep(intervalo)
+            while i < intervalo:
+                if not send_data_from(ser,file_name):
+                    print("Error al enviar trama")
+                    break
+        print("Fin.")
 
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
@@ -46,7 +37,7 @@ def enviar_trama(port:str, baudrate:int, timeout:Union[float,int], fichero:str, 
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
 
-def repetidor(port: str, port_salida: str, baudrate: int, timeout:Union[float,int]):
+def modo_repetidor(port: str, port_salida: str, baudrate: int, timeout:Union[float,int]):
     """
     Repite la lectura de datos desde un puerto serial específico.
 
@@ -56,34 +47,18 @@ def repetidor(port: str, port_salida: str, baudrate: int, timeout:Union[float,in
     :param send_data: Si es True, envía datos al puerto serial.
     """
     try:
-        # Inicializa la conexión serial
         with serial.Serial(port, baudrate, timeout=timeout) as ser:
-            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
-            stream_data = []
-            while True:
-                # Lee datos del puerto
-                data = ser.read(1024)
-                if data:
-                    stream_data.append(data)
-                    print("Recibiendo ...", data)
-                    # Envia datos al puerto
-                else:
-                    if stream_data:
-                        if port_salida != port:
-                            with serial.Serial(port_salida, baudrate, timeout=timeout) as ser_salida:
-                                print(f"Conectado al puerto {port_salida} con velocidad {baudrate} baudios.")
-                                for data in stream_data:
-                                    print("Enviado ...... ", data)
-                                    ser_salida.write(data)
-                        else:
-                            for data in stream_data:
-                                print("Enviado ...... " , data)
-                                ser.write(data)
+            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.") 
 
-                        print("Envio de stream finalizada")
-                        stream_data = []
+            with serial.Serial(port_salida, baudrate, timeout=timeout) as ser_salida:
+                print(f"Conectado al puerto {port_salida} con velocidad {baudrate} baudios.")
 
-                    
+                while True:
+                    file_name = read_data_from(ser,baudrate,timeout,None,None)
+                    if not send_data_from(ser_salida,file_name):
+                        print("Error al enviar trama")   
+                        break
+                
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
     except KeyboardInterrupt:
@@ -91,8 +66,7 @@ def repetidor(port: str, port_salida: str, baudrate: int, timeout:Union[float,in
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
 
-
-def read_serial_data(port: str, baudrate: int, save_to_file: bool, posiciones: str, timeout:Union[float,int], trama_file:str):
+def read_serial_data(port: str, baudrate: int, save_to_file: bool, posiciones: str, timeout:Union[float,int]):
     """
     Lee y muestra los datos recibidos desde un puerto serial específico.
     Detecta la finalización de un stream de bits y lo guarda en un archivo
@@ -108,58 +82,17 @@ def read_serial_data(port: str, baudrate: int, save_to_file: bool, posiciones: s
     hex_filename = None
     try:
         # Inicializa la conexión serial
+        if save_to_file:
+            hex_file = {
+                "files" : [],
+                "baudrate" : int(baudrate),
+                "posiciones" : posiciones
+            }
+
         with serial.Serial(port, baudrate, timeout=timeout) as ser:
-            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
-            if save_to_file:
-                timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-                hex_filename = os.path.abspath(os.path.join(os.path.dirname(__name__), "dumps", f'datos_hex_{baudrate}_{"-".join(posiciones.split(","))}_{timestamp}.csv'))
-                if not os.path.exists(os.path.dirname(hex_filename)):
-                    os.makedirs(os.path.dirname(hex_filename))
-                hex_file = open(hex_filename, 'w')
-                
+            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")               
                 # Escribe un comentario con la velocidad en baudios en el archivo hexadecimal
-                hex_file.write(f"Trama;Posiciones\n")
-                print(f"Guardando datos en {hex_filename}")
-
-            stream_data = []
-            while True:
-                tiempo_inicio = datetime.now()
-                # Lee datos del puerto
-                data = ser.read(1)
-                tiempo_fin = datetime.now()
-                data += ser.read(1023)
-                valid = True
-                if data:
-                    dec_data = data
-                    stream_data.append([dec_data, tiempo_fin - tiempo_inicio])
-                    print(f"Recibido (decimal): {dec_data} ({len(data)} bytes)")
-                else:
-                    if not stream_data:
-                        continue
-                    total_data = []
-                    total_times = []
-                    for data in stream_data:
-                        for byte, time_ in data:
-                            total_data.append(byte)
-                            total_times.append(time_)
-
-                    valid = trama_tools.validar_trama_bytes(total_data)
-
-                    with open(trama_file, "wb") as f:
-                        for data in stream_data:
-                            f.write(data)
-                    
-                    with open("%s.time" % (trama_file), "w") as f:
-                        for data_time in total_times:
-                            f.write("%s\n" % data_time)
-                    
-                    stream_data = []
-
-                    if save_to_file and valid:
-                        # Escribe el stream completo en el archivo
-                            hex_file.write(";".join([",".join([str(bytes) for bytes in total_data]), posiciones])+ "\n")
-                        # hex_file.write("# STREAM TERMINADO\n")
-                    print("# STREAM TERMINADO %s bytes" % (len(total_data)))
+            read_data_from(ser,baudrate,timeout,posiciones, hex_file)
                         
     except serial.SerialException as e:
         print(f"Error al abrir el puerto serial: {e}")
@@ -168,12 +101,14 @@ def read_serial_data(port: str, baudrate: int, save_to_file: bool, posiciones: s
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
     finally:
-        if save_to_file: 
-            if hex_file:
-                hex_file.close()
-            else:
-                print("No se pudo guardar el archivo de datos.")
-            print(f"Datos guardados en {hex_filename}")
+
+        if hex_file:
+            trama_tools.crear_lista_json(hex_file)
+
+            
+        else:
+            print("No se pudo guardar el archivo de datos.")
+        
 
 def detect_baud_rate(port: str, timeout:Union[float,int]):
     """
@@ -307,9 +242,57 @@ def calculate_message_size(port:str, baudrate:int, timeout:Union[float,int], ina
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
 
+
+def send_data_from(ser : "serial.Serial", file_name : str) -> bool:
+    try:
+        print("Enviando trama %s" % file_name)
+        lista_tramas = trama_tools.cargar_trama_bytes(file_name)
+        for trama in lista_tramas:
+            ser.write(trama["data"])
+            time.sleep(trama["timeout"])
+        print("OK")
+        return True
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+        return False
+    
+
+def read_data_from(ser, baudrate, timeout, posiciones=None, hex_file: Optional[List[str]] = None) -> Optional[str]:
+    stream_data = []
+    while True:
+        tiempo_inicio_trama = datetime.now()
+        # Lee datos del puerto
+        data = ser.read(1)
+        tiempo_primer_byte = datetime.now()
+        data += ser.read(1023)
+        tiempo_final_byte = datetime.now()
+        valid = True
+        if data:
+            dec_data = data
+            stream_data.append([dec_data,[tiempo_inicio_trama, tiempo_primer_byte, tiempo_final_byte]])
+            print(f"Recibido (decimal): {dec_data} ({len(data)} bytes)")
+        else:
+            if not stream_data:
+                continue
+            total_data = []
+            total_times = []
+            for data in stream_data:
+                for byte, time_ in data:
+                    total_data.append(byte)
+                    total_times.append([time_, len(byte)])
+
+            valid = trama_tools.validar_trama_bytes(total_data)
+            if valid:
+                file_name = trama_tools.guardar_trama_bytes(stream_data, total_times, baudrate, timeout, posiciones)
+                if hex_file:
+                    hex_file["files"].append(file_name)
+                else:
+                    return file_name
+            stream_data = []
+            print("# STREAM TERMINADO %s bytes" % (len(total_data)))
+
 def main_menu():
     while True:
-        config = config_mod.cargar_configuracion()
 
         print("\n--- MENÚ PRINCIPAL ---")
         print("1. Leer datos del puerto serial")
@@ -322,13 +305,14 @@ def main_menu():
 
         choice = input("Selecciona una opción: ")
 
-        current_port = config.get(section='CONFIG', option='port')
-        current_port_salida = config.get(section='CONFIG', option='portsalida')
-        current_baudrate = config.get(section='CONFIG', option='baudrate')
-        trama_file = config.get(section='CONFIG', option='tramafile')
-        repeticiones_envio = config.get(section='CONFIG', option='repeticionesenvio')
-        save_file = config.get(section='CONFIG', option='savefile')
-        posiciones_config = config.get(section='CONFIG', option='posiciones')
+        current_port = config_mod.CONFIG.get(section='CONFIG', option='port')
+        current_port_salida = config_mod.CONFIG.get(section='CONFIG', option='portsalida')
+        current_baudrate = config_mod.CONFIG.get(section='CONFIG', option='baudrate')
+        trama_file = config_mod.CONFIG.get(section='CONFIG', option='tramafile')
+        repeticiones_envio = config_mod.CONFIG.get(section='CONFIG', option='repeticionesenvio')
+        save_file = config_mod.CONFIG.get(section='CONFIG', option='savefile')
+        posiciones_config = config_mod.CONFIG.get(section='CONFIG', option='posiciones')
+        default_timeout = config_mod.CONFIG.get(section='CONFIG', option='timeout')
 
         if choice == '1':
             port = input("Introduce el puerto serial (por defecto '%s'): " %(current_port)) or current_port
@@ -342,8 +326,8 @@ def main_menu():
                     posiciones = posiciones.replace(" ", "")
                     if "," not in posiciones:
                         posiciones = ",".join(posiciones.split())
-            config_mod.actualizar_configuracion({'port': port, 'baudrate': baudrate, 'posiciones': posiciones, 'tramafile': trama_file, 'savefile': save_to_file})
-            read_serial_data(port=port, baudrate=int(baudrate), save_to_file=save_to_file, posiciones=posiciones, timeout=DEFAULT_TIMEOUT, trama_file=trama_file)
+            config_mod.actualizar_configuracion({'port': port, 'baudrate': baudrate, 'posiciones': posiciones, 'savefile': save_to_file})
+            read_serial_data(port=port, baudrate=int(baudrate), save_to_file=save_to_file, posiciones=posiciones, timeout=default_timeout)
         elif choice == '2':
             port = input("Introduce el puerto serial (por defecto '%s'): " %(current_port)) or current_port
             config_mod.actualizar_configuracion({'port': port})
@@ -357,13 +341,13 @@ def main_menu():
             port = input("Introduce el puerto serial (por defecto '%s'): " %(current_port)) or current_port
             baudrate = input("Introduce la velocidad en baudios (por defecto '%s'): " %(current_baudrate)) or current_baudrate
             config_mod.actualizar_configuracion({'port': port, 'baudrate': baudrate})
-            calculate_message_size(port=port, baudrate=int(baudrate),timeout=DEFAULT_TIMEOUT,inactivity_timeout=2)
+            calculate_message_size(port=port, baudrate=int(baudrate),timeout=default_timeout,inactivity_timeout=2)
         elif choice == '5':
             port_entrada = input("Introduce el puerto serial de entrada (por defecto '%s'): " %(current_port)) or current_port
             port_salida = input("Introduce el puerto serial de salida (por defecto '%s'): " %(current_port_salida)) or current_port_salida
             baudrate = input("Introduce la velocidad en baudios (por defecto '%s'): " %(current_baudrate)) or current_baudrate
             config_mod.actualizar_configuracion({'port': port_entrada,'porsalida': port_salida, 'baudrate': baudrate})
-            repetidor(port=port,port_salida=port_salida,baudrate= int(baudrate), timeout=DEFAULT_TIMEOUT)
+            modo_repetidor(port=port,port_salida=port_salida,baudrate= int(baudrate), timeout=default_timeout)
         elif choice == '6':
             port = input("Introduce el puerto serial (por defecto '%s'): " %(current_port)) or current_port
             baudrate = input("Introduce la velocidad en baudios (por defecto '%s'): " %(current_baudrate)) or current_baudrate

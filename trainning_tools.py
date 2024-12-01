@@ -1,101 +1,91 @@
 import ia_tools
 import graphics_tools
-import sys
-import os
-import numpy as np
-import tensorflow as tf
-from datetime import datetime
+import trama_tools
 import config as config_mod
+
+from datetime import datetime
+import numpy as np
+import os
+import sys
+
+from typing import List, Optional, Any
 
 
 LISTA_CLASES = ["fan1","fan2","fan3","cold","hot","dry"]
 
-CONFIG = config_mod.cargar_configuracion()
-
-def preprocess_fn(data, result):
-    return data, result
-
-def crear_dataset(datas, results):
-
-    dataset = tf.data.Dataset.from_tensor_slices((datas, results))
-    dataset.map(preprocess_fn)
-
-    return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-
-def calcular_predicciones(fichero):
+def calcular_predicciones(fichero :str) -> List[Any]:
     fichero_path = os.path.join(os.path.dirname(__file__), fichero)
     dataset, resultset = leer_fichero(fichero_path)
     lista_predicciones = []
     for data in dataset:
-        lista_predicciones.append(crear_dataset([data], None))
+        lista_predicciones.append(ia_tools.crear_dataset([data], None))
     
     return lista_predicciones
 
-def normalizar_datos(datos, check_size = False):
-    if check_size and len(datos) != 91:
-        print("Datos incorrectos, no tiene 91 elementos")
-        return False
+def normalizar_datos(datos : List[int]) -> list[int]:
+    while len(datos) < 94:
+        datos.append(0)
 
     return np.array([datos], dtype=np.float32)
 
-def leer_fichero(file_name):
+def leer_fichero(file_name: str) -> List[List[int], List[int]]:
     total_data = []
     total_results = []
-    print("Leyendo fichero %s" % file_name)
-    with open(file_name, "r") as f:
-        # print("recogiendo datos de %s" % file_name)
-        data_crudo = f.read()
-        datas = data_crudo.split("\n")[1:]
-        for data in datas:
-            if not data:
-                continue
-            data_list = data.split(",")
+    file_data = trama_tools.cargar_trama_bytes(file_name)
+    
+    for data in file_data:
+        datos_list = []
+        resultado = [int(valor) for valor in data["values"]]
+        while len(resultado) < 8:
+            resultado.insert(0, "0")
 
-            datos, resultado = data.split(";")
-            datos_list = [int(dato) for dato in datos.split(",")]
+        byte_value = int("".join(resultado), 2)
+        resultado_list = [byte_value]
 
-            resultado_list = resultado.split(",")
-            while len(resultado_list) < 8:
-                resultado_list.insert(0, "0")
-            byte_value = int("".join(resultado_list), 2)
-            resultado_list = [byte_value]
 
-            while len(resultado_list) < len(LISTA_CLASES):
-                resultado_list.append(0)
+        for valor in data["data"]:
+            datos_list.append(int(valor))
+    
+        datos_list = normalizar_datos(datos_list)
+        if datos_list is False:
+            print("Omitiendo linea de fichero %s" % file_name)
+            continue
 
-            datos_list = normalizar_datos(datos_list, True)
-            if datos_list is False:
-                print("Omitiendo linea de fichero %s" % file_name)
-                continue
+        total_data.append(datos_list)
+        total_results.append(resultado_list)
 
-            resultado_list = normalizar_datos(resultado_list)
-            total_data.append(datos_list)
-            total_results.append(resultado_list)
     return total_data, total_results
 
 
-def recoger_dataset(folder = None):
+def recoger_dataset(folder : Optional[str] = None):
     print("Recoger datasets ....")
     total_data = []
     total_results = []
-    folder_name = folder if folder else CONFIG.get(section='CONFIG', option='dumpsfolder')
+    folder_name = folder if folder else config_mod.CONFIG.get(section='CONFIG', option='dumpsfolder')
     print("Comprobando folder %s" % folder_name)
     num_ficheros = 0
     for file in os.listdir(folder_name):
         nombre_fichero = os.path.join(folder_name, file)
-        if not nombre_fichero.endswith("csv"):
+        if not nombre_fichero.endswith(".json"):
             continue
-        num_ficheros += 1
-        # print("Recogiendo datos de %s" % nombre_fichero)
-        data, results = leer_fichero(nombre_fichero)
-        total_data.extend(data)
-        total_results.extend(results)
+        
+        lista_ficheros = trama_tools.resuelve_nombre_binarios_lista(nombre_fichero)
+        for nombre_fichero_bin in lista_ficheros:
+            ruta_fichero = os.path.join(folder_name, nombre_fichero_bin)
+            if not os.path.exists(ruta_fichero):
+                print("No existe el fichero %s" % ruta_fichero)
+                continue
+            num_ficheros += 1
+
+            data, results = leer_fichero(ruta_fichero)
+            total_data.extend(data)
+            total_results.extend(results)
     
     print("Recolectadas %d tramas de %s ficheros" % (len(total_data), num_ficheros))
 
-    return crear_dataset(total_data, total_results)
+    return ia_tools.crear_dataset(total_data, total_results)
 
-def recoger_modelo(layers):
+def recoger_modelo(layers : List[int]) -> Any:
     return ia_tools.init_modelo(input_schema=(91,1), layers=layers, output_shapes=1)
 
 def main():
@@ -200,7 +190,7 @@ def main():
         elif trama:
             trama = normalizar_datos(trama, True)
             data = [np.array([trama], dtype=np.float32)]
-            data_pred = crear_dataset(data, None)
+            data_pred = ia_tools.crear_dataset(data, None)
             lista_tramas.append(data_pred)
 
         if not lista_tramas:
