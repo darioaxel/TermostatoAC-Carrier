@@ -1,8 +1,9 @@
 import tensorflow as tf
 import tensorflow_datasets as tfds
-import math
-import numpy as np
 import os
+import config as config_mod
+
+CONFIG = config_mod.cargar_configuracion()
 
 TAMANO_LOTE = 10
 
@@ -103,7 +104,7 @@ def load_modelo(nombre_modelo):
     if os.path.exists(nombre_modelo):
         nombre_modelo_path = nombre_modelo
     else:
-        nombre_modelo_path = os.path.join(os.path.dirname(__file__),'models', nombre_modelo)
+        nombre_modelo_path = os.path.join(os.path.dirname(__file__),CONFIG.get(section='CONFIG', option='modelsfolder'), nombre_modelo)
     if not os.path.exists(nombre_modelo_path):
         print("No existe el modelo %s" % nombre_modelo_path)
         return None
@@ -113,7 +114,7 @@ def load_modelo(nombre_modelo):
 
 def save_modelo(modelo, nombre_modelo):
     nombre_modelo = os.path.basename(nombre_modelo)
-    folder_modelos = os.path.join(os.path.dirname(__file__), "models")
+    folder_modelos = os.path.join(os.path.dirname(__file__), CONFIG.get(section='CONFIG', option='modelsfolder'))
     if not os.path.exists(folder_modelos):
         os.mkdir(folder_modelos)
     nombre_modelo = os.path.join(folder_modelos, nombre_modelo)

@@ -5,10 +5,12 @@ import os
 import numpy as np
 import tensorflow as tf
 from datetime import datetime
+import config as config_mod
 
 
 LISTA_CLASES = ["fan1","fan2","fan3","cold","hot","dry"]
-FOLDER_DUMPS = "dumps"
+
+CONFIG = config_mod.cargar_configuracion()
 
 def preprocess_fn(data, result):
     return data, result
@@ -76,7 +78,7 @@ def recoger_dataset(folder = None):
     print("Recoger datasets ....")
     total_data = []
     total_results = []
-    folder_name = folder if folder else FOLDER_DUMPS
+    folder_name = folder if folder else CONFIG.get(section='CONFIG', option='dumpsfolder')
     print("Comprobando folder %s" % folder_name)
     num_ficheros = 0
     for file in os.listdir(folder_name):
