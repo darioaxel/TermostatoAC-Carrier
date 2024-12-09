@@ -1,5 +1,4 @@
 import tensorflow as tf
-import tensorflow_datasets as tfds
 import os
 from .. import CONFIG
 from typing import Optional
@@ -7,42 +6,24 @@ from typing import Optional
 
 
 TAMANO_LOTE = 10
+REPETICIONES= 3
 
-def preprocess_fn(data, result):
-    return data, result
+""" def preprocess_fn(data, result):
+    return data, result """
 
 def crear_dataset(datas, results):
 
+    datas = [normalizar(data) for data in datas]
+    results = [normalizar(result) for result in results]
     dataset = tf.data.Dataset.from_tensor_slices((datas, results))
-    dataset.map(preprocess_fn)
+    #dataset.map(preprocess_fn)
 
-    return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE).repeat(REPETICIONES).shuffle(len(datas))
 
-def inicializar_dataset(nombre):
-    datos, metadatatos = tfds.load(nombre, with_info=True, as_supervised=True)
-    datos_entrenamiento, datos_prueba = datos['train'], datos['test']
-    print(datos_entrenamiento)
-    print(datos_prueba)
-
-    datos_entrenamiento = datos_entrenamiento.map(normalizar)
-    datos_prueba = datos_prueba.map(normalizar)
-    datos_entrenamiento = datos_entrenamiento.cache()
-    datos_prueba = datos_prueba.cache()
-
-    return datos_entrenamiento, datos_prueba, metadatatos
-
-def inicializar_datos(nombre_repo):
-    print("Inicializando datos...")
-    datos_entrenamiento, datos_prueba, metadatos = inicializar_dataset(nombre_repo)
-    num_entrenamiento = metadatos.splits['train'].num_examples
-    datos_entrenamiento = datos_entrenamiento.repeat().shuffle(num_entrenamiento).batch(TAMANO_LOTE)
-    datos_prueba = datos_prueba.batch(TAMANO_LOTE)
-    return datos_entrenamiento, datos_prueba, metadatos
-
-def normalizar(datos, tipos):
+def normalizar(datos):
     datos = tf.cast(datos, tf.float32)
     datos /= 255 # pasa de 0..255 a 0...1
-    return datos, tipos
+    return datos
 
 
 def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.001):
@@ -100,12 +81,12 @@ def predecir(trama, modelo, lista_clases):
     print(posiciones) """
 
 
-def entrenar_datos(datos, resultados, epocas, num_datos, modelo, verb=True):
+def entrenar_datos(datos, epocas, num_datos, modelo, verb=True):
 
     print("Entrenando modelo durante %d epocas ..." % (epocas))
     print("Datos: %d" % num_datos)
     print("Modelo: %s" %  modelo)
-    result = modelo.fit(datos, resultados,epochs=epocas, verbose=verb) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
+    result = modelo.fit(datos, epochs=epocas, verbose=verb) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
     print("Entrenamiento finalizado")
     return result
 

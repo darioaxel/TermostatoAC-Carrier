@@ -48,8 +48,10 @@ class TrainningInterface(CommonInterface):
             save_modelo = self.config["savefile"]
             modelo = ia_tools.load_modelo(nombre_modelo, self.config['modelofolder']) if nombre_modelo else self.recoger_modelo(layers=layers)
 
-            dataset = self.recoger_dataset(dataset_folder)
-            result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)
+            datos = self.recoger_dataset(dataset_folder)
+
+
+            result = ia_tools.entrenar_datos(datos=datos, epocas=epocas, num_datos=len(datos), modelo=modelo)
             if save_modelo:
                 epocas_entrenadas, layers_modelo = ia_tools.recoge_datos_modelo(modelo)
                 if not epocas_entrenadas:
@@ -81,9 +83,10 @@ class TrainningInterface(CommonInterface):
         
         return lista_predicciones
 
-    def normalizar_datos(self, datos : List[int]) -> list[int]:
-        while len(datos) < 94:
-            datos.append(0)
+    def normalizar_datos(self, datos : List[int], check_size: bool = False) -> list[int]:
+        if check_size:
+            while len(datos) < 94:
+                datos.append(0)
 
         return np.array([datos], dtype=np.float32)
 
@@ -97,7 +100,7 @@ class TrainningInterface(CommonInterface):
             for valor in data["data"]:
                 datos_list.append(int(valor))
         
-        datos_list = self.normalizar_datos(datos_list)
+        datos_list = self.normalizar_datos(datos_list, True)
 
         if datos_list is False:
             print("Omitiendo linea de fichero %s" % file_name)
@@ -109,7 +112,8 @@ class TrainningInterface(CommonInterface):
             resultado_list.insert(0, 0)
 
         total_data.append(datos_list)
-        total_results.append(resultado_list)
+        result_formated = self.normalizar_datos(int("".join([str(bit) for bit in resultado_list]),2))
+        total_results.append(result_formated)
 
         return total_data, total_results
 
@@ -206,7 +210,7 @@ def main_menu(iface):
         modelo = ia_tools.load_modelo(nombre_modelo, iface.config['modelofolder']) if nombre_modelo else iface.recoger_modelo(layers=layers)
 
         dataset = iface.recoger_dataset(dataset_folder)
-        result = ia_tools.entrenar_datos(dataset, None, epocas, len(dataset), modelo)
+        result = ia_tools.entrenar_datos(datos=dataset, epocas=epocas, num_datos=len(dataset), modelo=modelo)
         if save_modelo:
             epocas_entrenadas, layers_modelo = ia_tools.recoge_datos_modelo(modelo)
             if not epocas_entrenadas:
