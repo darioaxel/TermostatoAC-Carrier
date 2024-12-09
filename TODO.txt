@@ -2,6 +2,7 @@ LOGGING
 enviar trama
 repetidor
 
+prediccion
 
 device read -port
 

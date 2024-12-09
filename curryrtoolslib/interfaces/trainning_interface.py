@@ -92,25 +92,24 @@ class TrainningInterface(CommonInterface):
         total_data = []
         total_results = []
         file_data = trama_tools.cargar_trama_bytes(file_name)
-        
+        datos_list = []
         for data in file_data:
-            datos_list = []
-            resultado_list = [int(valor) for valor in data["values"]]
-            while len(resultado_list) < 8:
-                resultado_list.insert(0, 0)
-
-
-
             for valor in data["data"]:
                 datos_list.append(int(valor))
         
-            datos_list = self.normalizar_datos(datos_list)
-            if datos_list is False:
-                print("Omitiendo linea de fichero %s" % file_name)
-                continue
+        datos_list = self.normalizar_datos(datos_list)
 
-            total_data.append(datos_list)
-            total_results.append(resultado_list)
+        if datos_list is False:
+            print("Omitiendo linea de fichero %s" % file_name)
+            return [], []
+
+        resultado_list = [int(valor) for valor in file_data[0]["values"]]
+
+        while len(resultado_list) < 8:
+            resultado_list.insert(0, 0)
+
+        total_data.append(datos_list)
+        total_results.append(resultado_list)
 
         return total_data, total_results
 
@@ -136,10 +135,11 @@ class TrainningInterface(CommonInterface):
                 num_ficheros += 1
 
                 data, results = self.leer_fichero(ruta_fichero)
+                # print("Recogido fichero %s con %s tramas" % (nombre_fichero_bin, data[0]))
                 total_data.extend(data)
                 total_results.extend(results)
         
-        print("Recolectadas %d tramas de %s ficheros" % (len(total_data), num_ficheros))
+        # print("Recolectadas %d tramas de %s ficheros" % (len(total_data), num_ficheros))
 
         return ia_tools.crear_dataset(total_data, total_results)
 
