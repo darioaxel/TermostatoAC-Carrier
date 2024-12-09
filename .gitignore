@@ -2,5 +2,6 @@
 /CH341SER
 /dumps
 /models
-/__pycache__
+__pycache__
 config.ini
+
