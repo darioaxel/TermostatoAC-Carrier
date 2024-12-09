@@ -1,0 +1,2 @@
+./curryrtool trainning entrenar -l 50,50,50 -s
+./curryrtool device read -s -o 100100

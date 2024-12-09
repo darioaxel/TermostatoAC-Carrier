@@ -1,7 +1,8 @@
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import os
-import config as config_mod
+from .. import CONFIG
+from typing import Optional
 
 
 
@@ -103,18 +104,18 @@ def entrenar_datos(datos, resultados, epocas, num_datos, modelo, verb=True):
 
     print("Entrenando modelo durante %d epocas ..." % (epocas))
     print("Datos: %d" % num_datos)
-    print("*", modelo)
+    print("Modelo: %s" %  modelo)
     result = modelo.fit(datos, resultados,epochs=epocas, verbose=verb) #, steps_per_epoch=math.ceil(num_datos/TAMANO_LOTE)
     print("Entrenamiento finalizado")
     return result
 
 
-def load_modelo(nombre_modelo):
+def load_modelo(nombre_modelo, folder: Optional[str] = None):
     nombre_modelo = os.path.basename(nombre_modelo)
     if os.path.exists(nombre_modelo):
         nombre_modelo_path = nombre_modelo
     else:
-        nombre_modelo_path = os.path.join(os.path.dirname(__file__),config_mod.CONFIG.get(section='CONFIG', option='modelsfolder'), nombre_modelo)
+        nombre_modelo_path = os.path.join(folder, nombre_modelo)
     if not os.path.exists(nombre_modelo_path):
         print("No existe el modelo %s" % nombre_modelo_path)
         return None
@@ -122,9 +123,9 @@ def load_modelo(nombre_modelo):
     model.summary()
     return model
 
-def save_modelo(modelo, nombre_modelo):
+def save_modelo(config, modelo, nombre_modelo):
     nombre_modelo = os.path.basename(nombre_modelo)
-    folder_modelos = os.path.join(os.path.dirname(__file__), config_mod.CONFIG.get(section='CONFIG', option='modelsfolder'))
+    folder_modelos = os.path.join(config['modelofolder'])
     if not os.path.exists(folder_modelos):
         os.mkdir(folder_modelos)
     nombre_modelo = os.path.join(folder_modelos, nombre_modelo)
