@@ -28,7 +28,7 @@ class CommonInterface:
             for arg in arguments.__dict__.keys():
                 if arg not in CONFIG.get_keys():
                     val = getattr(arguments, arg, None)
-                    print("Argumento extra %s -> %s" % (arg, val))
+                    # print("Argumento extra %s -> %s" % (arg, val))
                     self.config[arg] = val
 
         except Exception as e:
