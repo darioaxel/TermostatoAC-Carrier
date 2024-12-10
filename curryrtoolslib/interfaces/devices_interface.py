@@ -1,11 +1,13 @@
 from . common_interface import CommonInterface
-from .. utils import trama
+from .. utils import trama as trama_tools
 from .. import CONFIG
 import serial
 from datetime import datetime
 import time
 import sys
+import os
 import traceback
+import optparse
 
 
 from typing import List, Union, Optional
@@ -16,6 +18,22 @@ class DeviceInterface(CommonInterface):
 
     def __init__(self):
         super().__init__()
+
+    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
+        parser = optparse.OptionParser()
+        parser.add_option('-p', '--port', dest='port', help='Puerto de comunicacion')
+        parser.add_option('-b', '--baudrate', dest='baudrate', help='Baudrate')
+        parser.add_option('-t', '--timeout', dest='timeout', help='Timeout')
+        parser.add_option('-d', '--dumpsfolder', dest='dumpsfolder', help='Carpeta de dumps')
+        parser.add_option('-m', '--modelofolder', dest='modelofolder', help='Carpeta de modelos')
+        parser.add_option('-f', '--tramafile', dest='tramafile', help='Archivo de trama')
+        parser.add_option('-s', '--savefile', dest='savefile', help='Guardar archivo de trama', action="store_true", default=True)
+        parser.add_option('-o', '--posiciones', dest='posiciones', help='Posiciones de los modulos')
+        parser.add_option('-r', '--portsalida', dest='portsalida', help='Puerto de salida')
+        parser.add_option('-i', '--interval', dest='intervalo', help='Tiempo de envio entre tramas')
+        
+        (options, args) = parser.parse_args(custom_argv)
+        return self.load_config(options)
                
     def execute_actions(self):
         """
@@ -43,7 +61,7 @@ class DeviceInterface(CommonInterface):
             self.read_serial_data(port=port, baudrate=int(baudrate), timeout=float(timeout), posiciones=posiciones, save_to_file=save_to_file)
         elif action == "write":
 
-            if not self.check_not_null(['port','baudrate','timeout','file_name','repeticiones','intervalo']):
+            if not self.check_not_null(['port','baudrate','timeout','tramafile','repeticionesenvio','intervalo']):
                 print("Uso: %s device write -p <port> -b <baudrate> -t <timeout> -f <file_name> -r <repeticiones> -i <intervalo>" % sys.argv[0])
                 sys.exit(1)
 
@@ -52,20 +70,20 @@ class DeviceInterface(CommonInterface):
             timeout = self.config['timeout']
             posiciones = self.config['posiciones']
             file_name = self.config['tramafile']
-            repeticiones = self.config['repeticiones']
+            repeticiones = self.config['repeticionesenvio']
             intervalo = self.config['intervalo']
 
             self.enviar_trama(port=port, baudrate=int(baudrate), timeout=float(timeout), file_name=file_name, repeticiones=int(repeticiones), intervalo=int(intervalo))
         
-        elif action == "repetidor":
+        elif action == "repeat":
             if not self.check_not_null(['port','baudrate','timeout','portsalida']):
                 print("Uso: %s device repetidor -p <port> -r <port_salida> -b <baudrate> -t <timeout>" % sys.argv[0])
                 sys.exit(1)
 
-            port = self.config.port
-            port_salida = self.config.portsalida
-            baudrate = self.config.baudrate
-            timeout = self.config.timeout
+            port = self.config['port']
+            port_salida = self.config['portsalida']
+            baudrate = self.config['baudrate']
+            timeout = self.config['timeout']
 
             self.modo_repetidor(port=port, port_salida=port_salida, baudrate=int(baudrate), timeout=float(timeout))
         else:
@@ -85,10 +103,14 @@ class DeviceInterface(CommonInterface):
             with serial.Serial(port, baudrate, timeout=timeout) as ser:
                 print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
                 i = 0
-                while i < intervalo:
+                while i < repeticiones:
                     if not self.send_data_from(ser,file_name):
                         print("Error al enviar trama")
                         break
+                    i += 1
+                    print("Trama enviada %d/%d. Esperando %s seg. para nuevo envio" % (i,repeticiones, intervalo))
+                    time.sleep(intervalo)
+                    
             print("Fin.")
 
         except serial.SerialException as e:
@@ -116,7 +138,7 @@ class DeviceInterface(CommonInterface):
 
                     while True:
                         file_name = self.read_data_from(ser,baudrate,timeout,None,None)
-                        if not self.send_data_from(ser_salida,file_name):
+                        if not self.send_data_from(ser_salida,"%s.bin" % file_name):
                             print("Error al enviar trama")   
                             break
                     
@@ -165,7 +187,7 @@ class DeviceInterface(CommonInterface):
             traceback.print_exc()
         finally:
             if hex_file:
-                trama.crear_lista_json(lista=hex_file, posiciones=posiciones, baudrate=baudrate)        
+                trama_tools.crear_lista_json(lista=hex_file, posiciones=posiciones, baudrate=baudrate)        
 
     def detect_baud_rate(self, port: str, timeout:Union[float,int]):
         """
@@ -302,11 +324,25 @@ class DeviceInterface(CommonInterface):
 
     def send_data_from(self, ser : "serial.Serial", file_name : str) -> bool:
         try:
-            print("Enviando trama %s" % file_name)
-            lista_tramas = trama.cargar_trama_bytes(file_name)
-            for trama in lista_tramas:
+            file_name_path = os.path.join(CONFIG.get("dumpsfolder"), file_name)
+            # print("Enviando trama %s" % file_name_path)
+            lista_tramas = trama_tools.cargar_trama_bytes(file_name_path)
+            last_timeout = None
+            for num, trama in enumerate(lista_tramas):
+                new_timeout = datetime.strptime(trama["time"], "%Y-%m-%d %H:%M:%S.%f")
+                if last_timeout:
+                    wait_until = new_timeout - last_timeout
+                    wait_until = wait_until.total_seconds()
+                    current_timeout = float(trama["timeout"])
+                    #print("Waiting ...", wait_until)
+                    #print("Timeout ...", current_timeout)
+                    fixed_waiting = wait_until - current_timeout
+                    # print("Waiting ...", fixed_waiting)
+                    time.sleep(fixed_waiting)
+                last_timeout = new_timeout
+                print("Enviado %s/%s : %s (%s bytes)" % (0, num+1, [hex(val) for val in trama["data"]], len(trama["data"])))
                 ser.write(trama["data"])
-                time.sleep(trama["timeout"])
+
             print("OK")
             return True
         except Exception as e:
@@ -337,7 +373,7 @@ class DeviceInterface(CommonInterface):
                     tiempos_trama = [tiempos_trama[-1]]
                 stream_data.append([data, tiempos_trama])
                 tiempos_trama = []
-                print(f"Recibido {i}/{x}: {[int(str(val), 16) for val in data]} ({len(data)} bytes)")
+                print(f"Recibido {i}/{x+1}: {[hex(val) for val in data]} ({len(data)} bytes)")
                 x+=1
             else:
                 if not stream_data:
@@ -350,9 +386,9 @@ class DeviceInterface(CommonInterface):
                     total_times.append([time_, len(byte_)])
                     full_data += byte_
 
-                valid = trama.validar_trama_bytes(full_data)
+                valid = trama_tools.validar_trama_bytes(full_data)
                 if valid:
-                    file_name = trama.guardar_trama_bytes(total_data, total_times, baudrate, timeout, posiciones)
+                    file_name = trama_tools.guardar_trama_bytes(total_data, total_times, baudrate, timeout, posiciones)
                     if hex_file:
                         hex_file["files"].append(file_name)
                     else:

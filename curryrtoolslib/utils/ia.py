@@ -6,7 +6,7 @@ from typing import Optional
 
 
 TAMANO_LOTE = 10
-REPETICIONES= 3
+REPETICIONES= 1
 
 """ def preprocess_fn(data, result):
     return data, result """
@@ -14,7 +14,8 @@ REPETICIONES= 3
 def crear_dataset(datas, results):
 
     datas = [normalizar(data) for data in datas]
-    results = [normalizar(result) for result in results]
+    if results:
+        results = [normalizar(result) for result in results]
     dataset = tf.data.Dataset.from_tensor_slices((datas, results))
     #dataset.map(preprocess_fn)
 
@@ -26,7 +27,7 @@ def normalizar(datos):
     return datos
 
 
-def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.001):
+def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
     print("Inicializando modelo...")
     print("Input schema: %s" % str(input_schema))
     print("Output shapes: %s" % str(output_shapes))

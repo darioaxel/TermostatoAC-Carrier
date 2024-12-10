@@ -20,12 +20,21 @@ class TrainningInterface(CommonInterface):
 
     def __init__(self):
         super().__init__()
+
+    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
+        parser = optparse.OptionParser()
+        parser.add_option('-m', '--model_file', dest='modelfile', help='Archivo del modelo', default=None)
+        parser.add_option('-f', '--file_name', dest='tramafile', help='Archivo con trama o lista de tramas', default=None)
+        parser.add_option('-l', '--layers', dest='layers', help='Capas', default="20,20,20")
+        parser.add_option('-e', '--epocs', dest='epocs', help='Epocas', default="10000")
+        parser.add_option('-s', '--savefile', dest='savefile', help='Guardar archivo del modelo entrenado', action="store_true", default=True)
+        
+        (options, args) = parser.parse_args(custom_argv)
+        return self.load_config(options)
                
     def execute_actions(self):
         action = sys.argv[2]
-        if action == "menu":
-            main_menu(self)
-        elif action == "pesos":
+        if action == "pesos":
             
             if not self.check_not_null(['modelfile']):
                 print("Uso: %s trainning pesos -m <file>" % sys.argv[0])
@@ -59,29 +68,49 @@ class TrainningInterface(CommonInterface):
                 time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 ia_tools.save_modelo(self.config, modelo, "modelo__%s__%s_%s.keras" % ("_".join(layers_modelo), epocas_entrenadas, time_stamp))
             graphics.mostrar_graf(result)
+        elif action == "predecir":
+            if not self.check_not_null(['modelfile','tramafile']):
+                print("Uso: %s trainning predecir -m <file>" % sys.argv[0])
+                sys.exit(1)
+
+            nombre_modelo = self.config['modelfile']
+            modelo = ia_tools.load_modelo(nombre_modelo, self.config['modelofolder'])
+            nombre_fichero = self.config['tramafile']
+            lista_tramas = []
+            if nombre_fichero:
+                print("Nombre fichero %s" % nombre_fichero)
+                lista_tramas = self.calcular_predicciones(nombre_fichero)
+            if not lista_tramas:
+                print("No se ha especificado un fichero o una trama")
+                return
+
+            print("Procesando %s predicciones" % len(lista_tramas))
+            for trama_ in lista_tramas:
+                ia_tools.predecir(trama_.take(1), modelo, LISTA_CLASES)
 
         else:
             print("Accion %s no reconocida" % (action))
 
-    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
-        parser = optparse.OptionParser()
-        parser.add_option('-m', '--model_file', dest='modelfile', help='Archivo del modelo', default=None)
-        parser.add_option('-l', '--layers', dest='layers', help='Capas', default="20,20,20")
-        parser.add_option('-e', '--epocs', dest='epocs', help='Epocas', default="10000")
-        parser.add_option('-s', '--savefile', dest='savefile', help='Guardar archivo del modelo entrenado', action="store_true", default=True)
-        
-        (options, args) = parser.parse_args(custom_argv)
-        return self.load_config(options)
-
-
     def calcular_predicciones(self, fichero :str) -> List[Any]:
-        fichero_path = os.path.join(os.path.dirname(__file__), fichero)
-        dataset, resultset = self.leer_fichero(fichero_path)
+        fichero_path = os.path.join(self.config["dumpsfolder"], fichero)
+        lista_ficheros = []
+        if "_" in fichero:
+            lista_ficheros = [os.path.join(self.config["dumpsfolder"], "%s.bin" % file_name) for file_name in trama_tools.resuelve_nombre_binarios_lista(fichero_path)]
+        else:
+            lista_ficheros.append(fichero_path)
+
         lista_predicciones = []
-        for data in dataset:
-            lista_predicciones.append(ia_tools.crear_dataset([data], None))
+        for fichero_path in lista_ficheros:
+            dataset, resultset = self.leer_fichero(fichero_path)
+            for data in dataset:
+                lista_predicciones.append(data)
+
+        """ else: # Es una trama solo
+            trama = self.normalizar_datos(trama, True)
+            data = np.array([trama], dtype=np.float32)
+            lista_predicciones.append(data) """
         
-        return lista_predicciones
+        return [ia_tools.crear_dataset([data], None) for data in lista_predicciones]
 
     def normalizar_datos(self, datos : List[int], check_size: bool = False) -> list[int]:
         if check_size:
@@ -91,7 +120,7 @@ class TrainningInterface(CommonInterface):
         return np.array([datos], dtype=np.float32)
 
     def leer_fichero(self, file_name: str) -> Union[List[int], List[int]]:
-        print("Leyendo fichero %s" % file_name) 
+        print("Leyendo fichero %s." % file_name) 
         total_data = []
         total_results = []
         file_data = trama_tools.cargar_trama_bytes(file_name)
@@ -151,121 +180,3 @@ class TrainningInterface(CommonInterface):
         print("Recoger modelo ....")
         print("Layers: %s" % layers)
         return ia_tools.init_modelo(input_schema=(94,1), layers=layers, output_shapes=1)
-
-def main_menu(iface):
-    # recogemos argumentos
-    if not len(sys.argv) > 1:
-        print("No se ha especificado ninguna acción")
-        return
-    
-    accion = sys.argv[1]
-    if accion == "pesos":
-        for arg in sys.argv:
-            if arg.startswith("modelo="):
-                nombre_modelo = arg.split("=")[1]
-                modelo = ia_tools.load_modelo(nombre_modelo, iface.config['modelofolder'])
-                if modelo:
-                    ia_tools.mostrar_pesos_modelo(modelo)
-            else:
-                pos = sys.argv.index(arg)
-                if pos < 2:
-                    continue
-                print("Argumento %s %s desconocido" % (pos, arg))
-            return
-
-    if accion == "entrenar":  
-
-        epocas = None
-        dataset_folder = iface.config['dumpsfolder']
-        nombre_modelo = None
-        save_modelo = False
-        layers = None
-        neuronas = None
-
-        for arg in sys.argv:
-            if arg.startswith("epocas="):
-                epocas = int(arg.split("=")[1])
-            elif arg.startswith("modelo="):
-                nombre_modelo = arg.split("=")[1]
-            elif arg.startswith("layers="):
-                layers = arg.split("=")[1].split(",")
-            elif arg.startswith("dataset="):
-                dataset_folder = iface.recoger_dataset(arg.split("=")[1])
-            elif arg == "save":
-                save_modelo = True
-            else:
-                pos = sys.argv.index(arg)
-                if pos < 2:
-                    continue
-                print("Argumento %s %s desconocido" % (pos, arg))
-                return
-
-        if not epocas:
-            epocas = 1000
-        
-        if not layers:
-            layers = [10]
-
-
-        modelo = ia_tools.load_modelo(nombre_modelo, iface.config['modelofolder']) if nombre_modelo else iface.recoger_modelo(layers=layers)
-
-        dataset = iface.recoger_dataset(dataset_folder)
-        result = ia_tools.entrenar_datos(datos=dataset, epocas=epocas, num_datos=len(dataset), modelo=modelo)
-        if save_modelo:
-            epocas_entrenadas, layers_modelo = ia_tools.recoge_datos_modelo(modelo)
-            if not epocas_entrenadas:
-                epocas_entrenadas = epocas
-            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            ia_tools.save_modelo(modelo, "modelo__%s__%s_%s.keras" % ("_".join(layers_modelo), epocas_entrenadas, time_stamp))
-        graphics.mostrar_graf(result)
-    elif accion == "prediccion":
-        
-        nombre_fichero = None
-        nombre_modelo = None
-        trama = None
-
-        for arg in sys.argv:
-            print("*%s" % arg)
-            if arg.startswith("modelo="):
-                nombre_modelo = arg.split("=")[1]
-            elif arg.startswith("fichero="):
-                nombre_fichero = arg.split("=")[1]
-            elif arg.startswith("trama="):
-                trama = arg.split("=")[1].split(",")
-                trama = [int(t) for t in trama]
-            else:
-                pos = sys.argv.index(arg)
-                if pos < 2:
-                    continue
-                print("Argumento %s %s desconocido" % (pos, arg))
-                return
-        
-        if not nombre_modelo:
-            print("No se ha especificado un modelo")
-            return
-
-        modelo = ia_tools.load_modelo(nombre_modelo, iface.config['modelofolder'])
-        data_pred = None
-
-        lista_tramas = []
-
-        if nombre_fichero:
-            print("Nombre fichero %s" % nombre_fichero)
-            lista_tramas = iface.calcular_predicciones(nombre_fichero)
-        elif trama:
-            trama = iface.normalizar_datos(trama, True)
-            data = [np.array([trama], dtype=np.float32)]
-            data_pred = ia_tools.crear_dataset(data, None)
-            lista_tramas.append(data_pred)
-
-        if not lista_tramas:
-            print("No se ha especificado un fichero o una trama")
-            return
-
-        print("Procesando %s predicciones" % len(lista_tramas))
-        for trama_ in lista_tramas:
-            ia_tools.predecir(trama_.take(1), modelo, LISTA_CLASES)
-
-    else:
-        print("Acción %s desconocida" % accion)
-        return

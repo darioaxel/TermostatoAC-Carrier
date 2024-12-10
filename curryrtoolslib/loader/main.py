@@ -1,5 +1,5 @@
 import sys
-from .. import entry_points
+from . import entry_points
 
 def startup():
 

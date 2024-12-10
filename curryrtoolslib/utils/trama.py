@@ -83,11 +83,10 @@ def cargar_trama_bytes(trama_file: str) -> List[Union[List[bytes], List[float]]]
     for times, size_ in info_json["times"]:
         data = stream[pos_stream : pos_stream + size_]
         pos_stream += size_
-        current_last_time = times[-1]
-        timeout = current_last_time - last_time if last_time else current_last_time
         new_data = {
             "data" : data,
-            "timeout" : timeout,
+            "timeout" : info_json["timeout"],
+            "time" : times[0],
             "values" : info_json["values"]
         }
         result.append(new_data)
