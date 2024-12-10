@@ -28,7 +28,7 @@ class TrainningInterface(CommonInterface):
         parser.add_option('-l', '--layers', dest='layers', help='Capas', default="20,20,20")
         parser.add_option('-e', '--epocs', dest='epocs', help='Epocas', default="10000")
         parser.add_option('-s', '--savefile', dest='savefile', help='Guardar archivo del modelo entrenado', action="store_true", default=True)
-        
+        parser.add_option('-o', '--opt', dest='optimizado', help='Afinado', default="0.001")
         (options, args) = parser.parse_args(custom_argv)
         return self.load_config(options)
                
@@ -46,22 +46,20 @@ class TrainningInterface(CommonInterface):
                 ia_tools.mostrar_pesos_modelo(modelo)
 
         elif action == "entrenar":
-            if not self.check_not_null(['layers','epocs','dumpsfolder']):
-                print("Uso: %s trainning begin -m <file>" % sys.argv[0])
+            if not self.check_not_null(['layers','epocs','dumpsfolder','optimizado']):
+                print("Uso: %s trainning begin -m <file> -o <optimizado>" % sys.argv[0])
                 sys.exit(1)
 
             nombre_modelo = self.config['modelfile']
-            layers = self.config['layers'].split(",")
             epocas = int(self.config['epocs'])
-            dataset_folder = self.config['dumpsfolder']
-            save_modelo = self.config["savefile"]
-            modelo = ia_tools.load_modelo(nombre_modelo, self.config['modelofolder']) if nombre_modelo else self.recoger_modelo(layers=layers)
 
-            datos = self.recoger_dataset(dataset_folder)
+            modelo = ia_tools.load_modelo(nombre_modelo, self.config['modelofolder']) if nombre_modelo else self.crear_modelo()
+
+            datos = self.recoger_dataset()
 
 
             result = ia_tools.entrenar_datos(datos=datos, epocas=epocas, num_datos=len(datos), modelo=modelo)
-            if save_modelo:
+            if self.config["savefile"]:
                 epocas_entrenadas, layers_modelo = ia_tools.recoge_datos_modelo(modelo)
                 if not epocas_entrenadas:
                     epocas_entrenadas = epocas
@@ -73,25 +71,22 @@ class TrainningInterface(CommonInterface):
                 print("Uso: %s trainning predecir -m <file>" % sys.argv[0])
                 sys.exit(1)
 
-            nombre_modelo = self.config['modelfile']
-            modelo = ia_tools.load_modelo(nombre_modelo, self.config['modelofolder'])
-            nombre_fichero = self.config['tramafile']
-            lista_tramas = []
-            if nombre_fichero:
-                print("Nombre fichero %s" % nombre_fichero)
-                lista_tramas = self.calcular_predicciones(nombre_fichero)
-            if not lista_tramas:
-                print("No se ha especificado un fichero o una trama")
-                return
+            modelo = ia_tools.load_modelo(self.config['modelfile'], self.config['modelofolder'])
+            lista_tramas = self.calcular_predicciones()
 
             print("Procesando %s predicciones" % len(lista_tramas))
             for trama_ in lista_tramas:
                 ia_tools.predecir(trama_.take(1), modelo, LISTA_CLASES)
+            else:
+                print("No se han encontrado tramas que procesar")
 
         else:
             print("Accion %s no reconocida" % (action))
 
-    def calcular_predicciones(self, fichero :str) -> List[Any]:
+    def calcular_predicciones(self) -> List[Any]:
+        fichero : str =  self.config['tramafile']
+        if not fichero:
+            return []
         fichero_path = os.path.join(self.config["dumpsfolder"], fichero)
         lista_ficheros = []
         if "_" in fichero:
@@ -104,11 +99,6 @@ class TrainningInterface(CommonInterface):
             dataset, resultset = self.leer_fichero(fichero_path)
             for data in dataset:
                 lista_predicciones.append(data)
-
-        """ else: # Es una trama solo
-            trama = self.normalizar_datos(trama, True)
-            data = np.array([trama], dtype=np.float32)
-            lista_predicciones.append(data) """
         
         return [ia_tools.crear_dataset([data], None) for data in lista_predicciones]
 
@@ -120,7 +110,7 @@ class TrainningInterface(CommonInterface):
         return np.array([datos], dtype=np.float32)
 
     def leer_fichero(self, file_name: str) -> Union[List[int], List[int]]:
-        print("Leyendo fichero %s." % file_name) 
+        # print("Leyendo fichero %s." % file_name) 
         total_data = []
         total_results = []
         file_data = trama_tools.cargar_trama_bytes(file_name)
@@ -147,8 +137,9 @@ class TrainningInterface(CommonInterface):
         return total_data, total_results
 
 
-    def recoger_dataset(self, folder_name : str):
+    def recoger_dataset(self):
         print("Recoger datasets ....")
+        folder_name = self.config['dumpsfolder']
         total_data = []
         total_results = []
         print("Comprobando folder %s" % folder_name)
@@ -176,7 +167,21 @@ class TrainningInterface(CommonInterface):
 
         return ia_tools.crear_dataset(total_data, total_results)
 
-    def recoger_modelo(self, layers : List[int]) -> Any:
-        print("Recoger modelo ....")
-        print("Layers: %s" % layers)
-        return ia_tools.init_modelo(input_schema=(94,1), layers=layers, output_shapes=1)
+    def crear_modelo(self) -> Any:
+        #print("Creando modelo ....")
+        conf_layer = self.config['layers']
+        layers = []
+        if "," in conf_layer:
+            layers = [int(layer) for layer in conf_layer.split(",")]
+        elif "*" in conf_layer:
+            num, neu = conf_layer.split("*")
+            for i in range(int(num)):
+                layers.append(int(neu))
+        else:
+            raise Exception("Error en la configuración de capas")
+            
+        optimizado = float(self.config['optimizado'])
+        #print("Creando modelo ....")
+        #print("Layers: %s" % layers)
+        print("Optimizado: %s" % optimizado)
+        return ia_tools.init_modelo(input_schema=(94,1), layers=layers, output_shapes=1, opt=optimizado)

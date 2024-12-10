@@ -31,17 +31,19 @@ def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
     print("Inicializando modelo...")
     print("Input schema: %s" % str(input_schema))
     print("Output shapes: %s" % str(output_shapes))
+    print("Optimizador: %s" % str(opt))
     print("Layers: %s" % str(layers))
 
     layers_list = []
-    layers_list.append(tf.keras.layers.Flatten(input_shape=input_schema)) # 91, 1, 1 - blanco y negro
-    for layer in layers:
-        #print("*  +++ add Layer %d" % num)
+    #layers_list.append(tf.keras.layers.Flatten(input_shape=input_schema)) # 91, 1, 1 - blanco y negro
+    layers_list.append(tf.keras.Input(shape=input_schema)) 
+    for num, layer in enumerate(layers):
+        # print("*  +++ add Layer %d -> %d" % (num, layer))
         layers_list.append(tf.keras.layers.Dense(int(layer), activation=tf.nn.relu))
     
-    #layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.relu))
+    # layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.relu))
     layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.sigmoid))
-    #tf.keras.layers.Dense(10, activation=tf.nn.softmax) # Para redes de clasificación
+    # layers_list.append(tf.keras.layers.Dense(output_shapes, activation=tf.nn.softmax)) # Para redes de clasificación
     modelo = tf.keras.Sequential(layers_list)
     modelo.compile(
         optimizer=tf.keras.optimizers.Adam(opt),
@@ -50,6 +52,8 @@ def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
         loss='mean_squared_error',
         metrics=['accuracy']
     )
+    print("Modelo inicializado")
+    print(modelo.summary())
     return modelo
 
 
