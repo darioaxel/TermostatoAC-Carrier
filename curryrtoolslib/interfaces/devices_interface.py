@@ -77,7 +77,7 @@ class DeviceInterface(CommonInterface):
         
         elif action == "repeat":
             if not self.check_not_null(['port','baudrate','timeout','portsalida']):
-                print("Uso: %s device repetidor -p <port> -r <port_salida> -b <baudrate> -t <timeout>" % sys.argv[0])
+                print("Uso: %s device repeat -p <port> -r <port_salida> -b <baudrate> -t <timeout>" % sys.argv[0])
                 sys.exit(1)
 
             port = self.config['port']
