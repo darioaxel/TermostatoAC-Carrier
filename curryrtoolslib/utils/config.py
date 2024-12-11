@@ -1,6 +1,6 @@
 import configparser
 import os
-
+from typing import List, Dict
 class ConfigurationManager:
 
     config : 'configparser.ConfigParser'
@@ -15,11 +15,11 @@ class ConfigurationManager:
         'savefile': 's',
         'timeout': '0.1',
         'repeticionesenvio' : ' 30',
-        'portsalida': '/dev/ttyUSB1'
-
+        'portsalida': '/dev/ttyUSB1',
+        'neuronasfirstlayer': '79'
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         folder = os.path.join(os.path.expanduser('~'), '.config', 'curryrtools')
         if not os.path.exists(folder):
@@ -30,20 +30,20 @@ class ConfigurationManager:
 
         
 
-    def get(self, key):
+    def get(self, key: str) -> str:
         try:
             return self.config.get(section='CONFIG', option=key)
-        except Exception as e:
-            print(f"Error al obtener la clave {key}: {e}")
+        except Exception:
             if key in self.lista_config:
                 print(f"Se ha creado la clave {key} con el valor {self.lista_config[key]}")
                 self.set(key, self.lista_config[key])
                 return self.lista_config[key]
+            raise Exception("No existe la clave %s" % key)
             
-    def set(self, key, val):
+    def set(self, key: str, val: str) -> None:
         self.update({key: val})
 
-    def update(self, data: dict[str: str]):
+    def update(self, data: Dict[str, str]) -> None:
         need_update = False
         for key, val in data.items():
             current_val = None
@@ -59,7 +59,7 @@ class ConfigurationManager:
         if need_updated:
             self.save_config_file()
     
-    def load_config(self):
+    def load_config(self) -> None:
 
         self.config = configparser.ConfigParser()
         self.config.read(self.file_name)
@@ -75,18 +75,26 @@ class ConfigurationManager:
             self.get('savefile')
             self.get('timeout')
             self.get('repeticionesenvio')
-            self.get('portsalida')           
+            self.get('portsalida')   
+            self.get('neuronasfirstlayer')        
 
-    def save_config_file(self):
+    def save_config_file(self) -> None:
         with open(self.file_name, 'w') as configfile:
             self.config.write(configfile)
 
-    def __attr__(self, name):
+    def __attr__(self, name: str) -> str:
         if name in self.config.keys():
             return self.get(name)
         else:
             raise Exception("No existe la clave %s" % name)
         
-    def get_keys(self):
-        return self.config.options('CONFIG')
+    def get_keys(self) -> List[str]:
+        lista: List[str] = list(self.lista_config.keys()) 
+        for key_org in self.config.options('CONFIG'):
+            if key_org not in lista:
+                self.get(key_org)
+                lista.append(key_org)
+        
+        return lista
+        
 

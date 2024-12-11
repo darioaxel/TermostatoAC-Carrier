@@ -1,16 +1,17 @@
 from . common_interface import CommonInterface
 from .. utils import trama as trama_tools
 from .. import CONFIG
-import serial
+import serial # type: ignore[import]
 from datetime import datetime
 import time
 import sys
 import os
 import traceback
 import optparse
+import codecs
 
 
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple, Dict, Union
 
 class DeviceInterface(CommonInterface):
 
@@ -19,7 +20,7 @@ class DeviceInterface(CommonInterface):
     def __init__(self):
         super().__init__()
 
-    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
+    def parse_args(self, custom_argv: Optional[List[str]] = None) -> bool:
         parser = optparse.OptionParser()
         parser.add_option('-p', '--port', dest='port', help='Puerto de comunicacion')
         parser.add_option('-b', '--baudrate', dest='baudrate', help='Baudrate')
@@ -145,7 +146,7 @@ class DeviceInterface(CommonInterface):
                 print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.") 
 
                 while True:
-                    file_name = self.read_data_from(ser,baudrate,timeout,None,None)
+                    file_name = self.read_data_from(ser,baudrate,timeout)
                     if not self.send_data_from("%s.bin" % file_name, port_salida, baudrate, timeout):
                         print("Error al enviar trama")   
                         break
@@ -169,8 +170,7 @@ class DeviceInterface(CommonInterface):
         :param save_to_file: Si es True, guarda los datos en un archivo de texto.
         """
 
-        hex_file = None
-        hex_filename = None
+        hex_file : Dict[str, Union[str, int, List[str]]] = {}
         try:
             # Inicializa la conexión serial
             if save_to_file:
@@ -353,10 +353,10 @@ class DeviceInterface(CommonInterface):
 
                     time.sleep(fixed_waiting) """
 
-                print("Enviado %s/%s : %s (%s bytes)" % (0, num+1, [hex(val) for val in trama["data"]], len(trama["data"])))
+                print("Enviado %s/%s : %s (%s bytes)" % (0, num+1, [hex(val) for val in trama["data"]], len(trama["data"]))) # type: ignore[index]
                 if not ser.is_open:
                     ser.open()
-                ser.writelines([trama["data"]])
+                ser.writelines([trama["data"]]) # type: ignore[index]
                 ser.close()
                 time.sleep(0.18)
 
@@ -369,8 +369,8 @@ class DeviceInterface(CommonInterface):
             return False
     
 
-    def read_data_from(self, ser, baudrate, timeout, posiciones=None, hex_file: Optional[List[str]] = None) -> Optional[str]:
-        stream_data = []
+    def read_data_from(self, ser, baudrate, timeout, posiciones=None, hex_file: Dict[str, Union[str, int, List[str]]] = {}) -> Optional[str]:
+        stream_data: Tuple[bytes, List[str]] = [] # type: ignore[assignment]
         i = 0
         print("## ESPERANDO TRAMA %s" % i)
         x = 0
@@ -390,29 +390,31 @@ class DeviceInterface(CommonInterface):
             if data:
                 if x == 0:
                     tiempos_trama = [tiempos_trama[-1]]
-                stream_data.append([data, tiempos_trama])
+                stream_data.append([data, tiempos_trama]) # type: ignore[attr-defined]
                 tiempos_trama = []
                 print(f"Recibido {i}/{x+1}: {[hex(val) for val in data]} ({len(data)} bytes)")
+                #print(f"Recibido {i}/{x+1}: {[val for val in data]} ({len(data)} bytes)")
+                #print(f"Recibido {i}/{x+1}: {[chr(val) for val in data]} ({len(data)} bytes)")
                 x+=1
             else:
                 if not stream_data:
                     continue
                 total_data = []
                 total_times = []
-                full_data = []
+                full_data = [] # type: ignore[var-annotated]
                 for byte_, time_ in stream_data:
                     total_data.append(byte_)
-                    total_times.append([time_, len(byte_)])
-                    full_data += byte_
+                    total_times.append([time_, len(byte_)]) # type: ignore [arg-type]
+                    full_data += byte_ # type: ignore[arg-type]
 
                 valid = trama_tools.validar_trama_bytes(full_data)
                 if valid:
-                    file_name = trama_tools.guardar_trama_bytes(total_data, total_times, baudrate, timeout, posiciones)
+                    file_name = trama_tools.guardar_trama_bytes(total_data, total_times, baudrate, timeout, posiciones) # type: ignore[arg-type]
                     if hex_file:
-                        hex_file["files"].append(file_name)
+                        hex_file["files"].append(file_name) # type: ignore[union-attr]
                     else:
                         return file_name
-                stream_data = []
+                stream_data = [] # type: ignore[assignment]
                 
                 print("# STREAM TERMINADO %s bytes" % (len(full_data)))
                 i+= 1
@@ -454,8 +456,8 @@ def main_menu(iface: 'DeviceInterface'):
                     posiciones = posiciones.replace(" ", "")
                     if "," not in posiciones:
                         posiciones = ",".join(posiciones.split())
-            CONFIG.update({'port': port, 'baudrate': baudrate, 'posiciones': posiciones, 'savefile': 's' if save_to_file else 'n'})
-            iface.read_serial_data(port=port, baudrate=int(baudrate), save_to_file=save_to_file, posiciones=posiciones, timeout=float(default_timeout))
+            CONFIG.update({'port': port, 'baudrate': baudrate, 'posiciones': posiciones, 'savefile': 's' if save_to_file else 'n'}) # type: ignore[dict-item]
+            iface.read_serial_data(port=port, baudrate=int(baudrate), save_to_file=save_to_file, posiciones=posiciones, timeout=float(default_timeout)) # type: ignore[arg-type]
         elif choice == '2':
             port = input("Introduce el puerto serial (por defecto '%s'): " %(current_port)) or current_port
             CONFIG.update({'port': port})
@@ -482,7 +484,7 @@ def main_menu(iface: 'DeviceInterface'):
             fichero = input("Introduce el nombre del fichero con las tramas a enviar (por defecto '%s'): " %(trama_file)) or trama_file
             repeticiones = input("Introduce el número de repeticiones (por defecto '%s'): " %(repeticiones_envio)) or repeticiones_envio
             CONFIG.update({'port': port, 'baudrate': baudrate, 'tramafile': fichero, 'repeticionesenvio' : repeticiones})
-            iface.enviar_trama(port=port, baudrate=int(baudrate), fichero=fichero, repeticiones=int(repeticiones))
+            iface.enviar_trama(port=port, baudrate=int(baudrate), file_name=fichero, repeticiones=int(repeticiones), timeout=float(CONFIG.get('timeout'))) 
         elif choice == '7':
             print("Saliendo del programa.")
             break

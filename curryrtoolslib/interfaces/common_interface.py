@@ -1,18 +1,19 @@
 from .. import CONFIG
-from typing import Optional, List, Union, Dict
 import optparse
 import traceback
+
+from typing import Optional, List, Union, Dict
 
 
 class CommonInterface:
 
-    config: Dict[str, Union[str, int, float]]
+    config: Dict[str, str]
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.config = {}
 
-    def load_config(self, arguments):
+    def load_config(self, arguments: 'optparse.Values') -> bool:
 
         try:
             for key in CONFIG.get_keys():
@@ -27,7 +28,7 @@ class CommonInterface:
                 
             for arg in arguments.__dict__.keys():
                 if arg not in CONFIG.get_keys():
-                    val = getattr(arguments, arg, None)
+                    val = getattr(arguments, arg, "")
                     # print("Argumento extra %s -> %s" % (arg, val))
                     self.config[arg] = val
 
@@ -39,7 +40,7 @@ class CommonInterface:
         return True
 
 
-    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
+    def parse_args(self, custom_argv: Optional[List[str]] = None) -> bool:
         parser = optparse.OptionParser()
         parser.add_option('-p', '--port', dest='port', help='Puerto de comunicacion')
         parser.add_option('-b', '--baudrate', dest='baudrate', help='Baudrate')

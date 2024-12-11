@@ -7,21 +7,21 @@ from datetime import datetime
 import optparse
 import sys
 import os
-import numpy as np
-
-LISTA_CLASES = ["fan1","fan2","fan3","cold","hot","dry"]
 
 
-from typing import List, Union, Optional, Any
+from typing import List, Union, Optional, Any,TYPE_CHECKING, Tuple
+
+if TYPE_CHECKING:
+    from tensorflow.python.data.ops.dataset_ops import DatasetV2 # type: ignore[import]
 
 class TrainningInterface(CommonInterface):
 
     valid_sizes: List[int]
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-    def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
+    def parse_args(self, custom_argv: Optional[List[str]] = None) -> bool:
         parser = optparse.OptionParser()
         parser.add_option('-d', '--dumpsfolder', dest='dumpsfolder', help='Carpeta de dumps')
         parser.add_option('-m', '--model_file', dest='modelfile', help='Archivo del modelo', default=None)
@@ -30,10 +30,11 @@ class TrainningInterface(CommonInterface):
         parser.add_option('-e', '--epocs', dest='epocs', help='Epocas', default="10000")
         parser.add_option('-s', '--savefile', dest='savefile', help='Guardar archivo del modelo entrenado', action="store_true", default=True)
         parser.add_option('-o', '--opt', dest='optimizado', help='Afinado', default="0.001")
+        parser.add_option('-n', '--neuronas_fisrt_layer', dest='neuronasfirstlayer', help='Neuronas first layer')
         (options, args) = parser.parse_args(custom_argv)
         return self.load_config(options)
                
-    def execute_actions(self):
+    def execute_actions(self) -> None:
         action = sys.argv[2]
         if action == "pesos":
             
@@ -77,21 +78,21 @@ class TrainningInterface(CommonInterface):
 
             print("Procesando %s predicciones" % len(lista_tramas))
             for trama_ in lista_tramas:
-                ia_tools.predecir(trama_.take(1), modelo, LISTA_CLASES)
+                ia_tools.predecir(trama_.take(1), modelo)
             else:
                 print("No se han encontrado tramas que procesar")
 
         else:
             print("Accion %s no reconocida" % (action))
 
-    def calcular_predicciones(self) -> List[Any]:
-        fichero : str =  self.config['tramafile']
+    def calcular_predicciones(self) -> List['DatasetV2']:
+        fichero : str =  self.config['tramafile'] 
         if not fichero:
             return []
-        fichero_path = os.path.join(self.config["dumpsfolder"], fichero)
+        fichero_path = os.path.join(self.config["dumpsfolder"], fichero) 
         lista_ficheros = []
         if "_" in fichero:
-            lista_ficheros = [os.path.join(self.config["dumpsfolder"], "%s.bin" % file_name) for file_name in trama_tools.resuelve_nombre_binarios_lista(fichero_path)]
+            lista_ficheros = [os.path.join(self.config["dumpsfolder"], "%s.bin" % file_name) for file_name in trama_tools.resuelve_nombre_binarios_lista(fichero_path)] 
         else:
             lista_ficheros.append(fichero_path)
 
@@ -101,41 +102,38 @@ class TrainningInterface(CommonInterface):
             for data in dataset:
                 lista_predicciones.append(data)
         
-        return [ia_tools.crear_dataset([data], None) for data in lista_predicciones]
+        return [ia_tools.crear_dataset([data], None) for data in lista_predicciones] # type: ignore[list-item]
 
-    def normalizar_datos(self, datos : List[int], check_size: bool = False) -> list[int]:
-        if check_size:
-            while len(datos) < 94:
-                datos.append(0)
 
-        return np.array([datos], dtype=np.float32)
 
-    def leer_fichero(self, file_name: str) -> Union[List[int], List[int]]:
+    def leer_fichero(self, file_name: str) -> Tuple[list[list[int]], list[list[int]]]:
         # print("Leyendo fichero %s." % file_name) 
         total_data = []
-        total_results = []
+
         file_data = trama_tools.cargar_trama_bytes(file_name)
         datos_list = []
-        for data in file_data:
-            for valor in data["data"]:
+        for bloque, data in enumerate(file_data):
+            datos_bloque = trama_tools.normalizar_bloque(bloque, data["data"]) # type: ignore[index]
+            for pos, valor in enumerate(datos_bloque):                  
                 datos_list.append(int(valor))
-        
-        datos_list = self.normalizar_datos(datos_list, True)
 
-        if datos_list is False:
+        layer_size: int = int(self.config['neuronasfirstlayer']) # type: ignore[arg-type]
+        datos_list_norm = trama_tools.normalizar_datos(layer_size, datos_list, True)
+
+        if datos_list_norm is False:
             print("Omitiendo linea de fichero %s" % file_name)
             return [], []
 
-        resultado_list = [int(valor) for valor in file_data[0]["values"]]
+        resultado_list = [int(valor) for valor in file_data[0]["values"]] # type: ignore[index]
 
         while len(resultado_list) < 8:
             resultado_list.insert(0, 0)
 
-        total_data.append(datos_list)
-        result_formated = self.normalizar_datos(int("".join([str(bit) for bit in resultado_list]),2))
-        total_results.append(result_formated)
+        total_data.append(datos_list_norm)
+        list_data = [int("".join([str(bit) for bit in resultado_list]),2)]
+        total_results = [trama_tools.normalizar_datos(layer_size, list_data)]
 
-        return total_data, total_results
+        return total_data, total_results # type: ignore [return-value]
 
 
     def recoger_dataset(self):
@@ -170,7 +168,7 @@ class TrainningInterface(CommonInterface):
 
     def crear_modelo(self) -> Any:
         #print("Creando modelo ....")
-        conf_layer = self.config['layers']
+        conf_layer: str = self.config['layers'] # type: ignore[assignment]
         layers = []
         if "," in conf_layer:
             layers = [int(layer) for layer in conf_layer.split(",")]
@@ -181,8 +179,8 @@ class TrainningInterface(CommonInterface):
         else:
             raise Exception("Error en la configuración de capas")
             
-        optimizado = float(self.config['optimizado'])
-        #print("Creando modelo ....")
-        #print("Layers: %s" % layers)
-        print("Optimizado: %s" % optimizado)
-        return ia_tools.init_modelo(input_schema=(94,1), layers=layers, output_shapes=1, opt=optimizado)
+        optimizado = float(self.config['optimizado']) # type: ignore[arg-type]
+        neuronas_first_layer: int = int(self.config['neuronasfirstlayer']) # type: ignore[arg-type]
+ 
+        # print("Neuronas primera capa: %s" % neuronas_first_layer)
+        return ia_tools.init_modelo(input_schema=(neuronas_first_layer,1), layers=layers, output_shapes=1, opt=optimizado)
