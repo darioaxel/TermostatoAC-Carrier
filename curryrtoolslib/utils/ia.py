@@ -27,7 +27,7 @@ def normalizar(datos):
     return datos
 
 
-def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
+def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.001):
     print("Inicializando modelo...")
     print("Input schema: %s" % str(input_schema))
     print("Output shapes: %s" % str(output_shapes))

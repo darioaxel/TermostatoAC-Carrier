@@ -23,6 +23,7 @@ class TrainningInterface(CommonInterface):
 
     def parse_args(self, custom_argv: Optional[List[str]] = None) -> optparse.Values:
         parser = optparse.OptionParser()
+        parser.add_option('-d', '--dumpsfolder', dest='dumpsfolder', help='Carpeta de dumps')
         parser.add_option('-m', '--model_file', dest='modelfile', help='Archivo del modelo', default=None)
         parser.add_option('-f', '--file_name', dest='tramafile', help='Archivo con trama o lista de tramas', default=None)
         parser.add_option('-l', '--layers', dest='layers', help='Capas', default="20,20,20")
