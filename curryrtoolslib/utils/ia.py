@@ -1,7 +1,11 @@
 import tensorflow as tf
 import os
 from .. import CONFIG
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING, Tuple, Any, Iterable
+
+if TYPE_CHECKING:
+    from tensorflow.python.data.ops.dataset_ops import DatasetV2 # type: ignore [import]
+
 
 
 
@@ -11,23 +15,20 @@ REPETICIONES= 1
 """ def preprocess_fn(data, result):
     return data, result """
 
-def crear_dataset(datas, results):
+def crear_dataset(datas : List[int], results : Optional[List[int]]) -> 'DatasetV2':
 
-    datas = [normalizar(data) for data in datas]
-    if results:
-        results = [normalizar(result) for result in results]
-    dataset = tf.data.Dataset.from_tensor_slices((datas, results))
-    #dataset.map(preprocess_fn)
-
+    datasn = [normalizar(data) for data in datas]
+    resultsn = [normalizar(result) for result in results] if results else None
+    dataset = tf.data.Dataset.from_tensor_slices((datasn, resultsn)) # type: ignore [arg-type]
     return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE).repeat(REPETICIONES).shuffle(len(datas))
 
-def normalizar(datos):
-    datos = tf.cast(datos, tf.float32)
-    datos /= 255 # pasa de 0..255 a 0...1
-    return datos
+def normalizar(datos : int) -> 'tf.Tensor':
+    datosf: 'tf.Tensor' = tf.cast(datos, tf.float32)
+    datosf /= 255 # pasa de 0..255 a 0...1
+    return datosf
 
 
-def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
+def init_modelo(input_schema : Tuple[int, int], layers: Iterable[int] , output_shapes: int=1, opt: Optional[float] =0.001) -> Any:
     print("Inicializando modelo...")
     print("Input schema: %s" % str(input_schema))
     print("Output shapes: %s" % str(output_shapes))
@@ -57,8 +58,7 @@ def init_modelo(input_schema, output_shapes=1, layers=[10,10,10], opt=0.01):
     return modelo
 
 
-def predecir(trama, modelo, lista_clases):
-    print("Predecir...", lista_clases)
+def predecir(trama: str , modelo : Any):
     #trama = np.array(trama)
     prediccion = modelo.predict(trama)
     print(prediccion)
@@ -96,7 +96,7 @@ def entrenar_datos(datos, epocas, num_datos, modelo, verb=True):
     return result
 
 
-def load_modelo(nombre_modelo, folder: Optional[str] = None):
+def load_modelo(nombre_modelo, folder: str):
     nombre_modelo = os.path.basename(nombre_modelo)
     if os.path.exists(nombre_modelo):
         nombre_modelo_path = nombre_modelo
