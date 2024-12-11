@@ -100,16 +100,26 @@ class DeviceInterface(CommonInterface):
         :param file_name: Fichero de contien la trama a enviar
         """
         try:
-            with serial.Serial(port, baudrate, timeout=timeout) as ser:
-                print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
-                i = 0
-                while i < repeticiones:
-                    if not self.send_data_from(ser,file_name):
+            
+            print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.")
+            i = 0
+            lista_ficheros = []
+            if "_" in file_name:
+                fichero_path = os.path.join(self.config["dumpsfolder"], file_name)
+                lista_ficheros = ["%s.bin" % file_name for file_name in trama_tools.resuelve_nombre_binarios_lista(fichero_path)]
+            else:
+                lista_ficheros.append(file_name)
+
+
+            while i < repeticiones:
+                for fichero in lista_ficheros:
+                    print("Enviando trama %s" % fichero)
+                    if not self.send_data_from(fichero, port, baudrate, timeout):
                         print("Error al enviar trama")
                         break
-                    i += 1
-                    print("Trama enviada %d/%d. Esperando %s seg. para nuevo envio" % (i,repeticiones, intervalo))
-                    time.sleep(intervalo)
+                i += 1
+                print("Trama/s enviada %d/%d. Esperando %s seg. para nuevo envio" % (i,repeticiones, intervalo))
+                time.sleep(intervalo)
                     
             print("Fin.")
 
@@ -119,6 +129,7 @@ class DeviceInterface(CommonInterface):
             print("Lectura interrumpida por el usuario.")
         except Exception as e:
             print(f"Ocurrió un error inesperado: {e}")
+            print(traceback.format_exc())
 
     def modo_repetidor(self, port: str, port_salida: str, baudrate: int, timeout:Union[float,int]):
         """
@@ -133,14 +144,11 @@ class DeviceInterface(CommonInterface):
             with serial.Serial(port, baudrate, timeout=timeout) as ser:
                 print(f"Conectado al puerto {port} con velocidad {baudrate} baudios.") 
 
-                with serial.Serial(port_salida, baudrate, timeout=timeout) as ser_salida:
-                    print(f"Conectado al puerto {port_salida} con velocidad {baudrate} baudios.")
-
-                    while True:
-                        file_name = self.read_data_from(ser,baudrate,timeout,None,None)
-                        if not self.send_data_from(ser_salida,"%s.bin" % file_name):
-                            print("Error al enviar trama")   
-                            break
+                while True:
+                    file_name = self.read_data_from(ser,baudrate,timeout,None,None)
+                    if not self.send_data_from("%s.bin" % file_name, port_salida, baudrate, timeout):
+                        print("Error al enviar trama")   
+                        break
                     
         except serial.SerialException as e:
             print(f"Error al abrir el puerto serial: {e}")
@@ -322,13 +330,16 @@ class DeviceInterface(CommonInterface):
             print(f"Ocurrió un error inesperado: {e}")
 
 
-    def send_data_from(self, ser : "serial.Serial", file_name : str) -> bool:
+    def send_data_from(self, file_name : str, port: str, baudrate: int, timeout: float) -> bool:
         try:
             file_name_path = os.path.join(CONFIG.get("dumpsfolder"), file_name)
             # print("Enviando trama %s" % file_name_path)
             lista_tramas = trama_tools.cargar_trama_bytes(file_name_path)
             last_timeout = None
+            ser = serial.Serial(port, baudrate, timeout=timeout)
             for num, trama in enumerate(lista_tramas):
+                """  print("NUM", num)
+                port = self.config["port"]
                 new_timeout = datetime.strptime(trama["time"], "%Y-%m-%d %H:%M:%S.%f")
                 if last_timeout:
                     wait_until = new_timeout - last_timeout
@@ -336,17 +347,25 @@ class DeviceInterface(CommonInterface):
                     current_timeout = float(trama["timeout"])
                     #print("Waiting ...", wait_until)
                     #print("Timeout ...", current_timeout)
-                    fixed_waiting = wait_until - current_timeout
-                    # print("Waiting ...", fixed_waiting)
-                    time.sleep(fixed_waiting)
-                last_timeout = new_timeout
+                    # fixed_waiting = wait_until - current_timeout
+                    fixed_waiting = 0.1
+                    print("Waiting ...", fixed_waiting)
+
+                    time.sleep(fixed_waiting) """
+
                 print("Enviado %s/%s : %s (%s bytes)" % (0, num+1, [hex(val) for val in trama["data"]], len(trama["data"])))
-                ser.write(trama["data"])
+                if not ser.is_open:
+                    ser.open()
+                ser.writelines([trama["data"]])
+                ser.close()
+                time.sleep(0.18)
+
 
             print("OK")
             return True
         except Exception as e:
             print(f"Ocurrió un error inesperado: {e}")
+            print(traceback.format_exc())
             return False
     
 
