@@ -1,5 +1,7 @@
 ./curryrtool trainning entrenar -l 50,50,50 -s
+./curryrtool trainning entrenar -l 8*100 -s
 ./curryrtool device read -s -o 100100
 ./curryrtool trainning predecir -m modelo__94_12_12_12_1__1_20241210_091433.keras -f 19c60940-2ee8-4784-af63-5551a97387a2.bin
 ./curryrtool trainning predecir -m modelo__94_12_12_12_1__1_20241210_091433.keras -f dump_list_2024-12-10_09-05-15.json
 ./curryrtool device write -f 19c60940-2ee8-4784-af63-5551a97387a2.bin -i 10
+./curryrtool device repeat -p /dev/ttyUSB0 -r /dev/ttyUSB1
