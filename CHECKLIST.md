@@ -2,7 +2,8 @@
 
 > **Objetivo:** Identificar completamente el protocolo CCN del termostato Carrier CRC2-NTC para emular su comportamiento  
 > **Método:** Análisis diferencial con variación controlada de estados  
-> **Hardware:** Adaptador USB-RS485 (CH341) + Conexión 3-hilos (+12V, GND, Datos)
+> **Hardware:** Adaptador USB-RS485 (CH341) + Conexión 3-hilos (+12V, GND, Datos)  
+> **Versión:** 2.0 (actualizado para arquitectura curryrtoolslib)
 
 ---
 
@@ -26,13 +27,27 @@
 - [ ] Conectar termostato: P→+12V, G→GND, C→RS485-A/B
 - [ ] Verificar LED de actividad en el adaptador
 
-### 0.2 Preparación de Scripts
+### 0.2 Preparación de Entorno Python
 
-- [ ] Verificar `USB2RS485.py` funciona correctamente
-- [ ] Crear directorio de capturas: `mkdir -p dumps/phase1 dumps/phase2 dumps/phase3`
-- [ ] Preparar script de captura automatizada (ver abajo)
+```bash
+# Instalar dependencias
+pip install pyserial tensorflow numpy matplotlib
 
-### 0.3 Script de Captura Base
+# Verificar instalación
+python3 -c "import serial; print('pyserial OK')"
+python3 -c "import tensorflow; print('tensorflow OK')"
+```
+
+### 0.3 Estructura de Directorios
+
+```bash
+# Crear estructura para análisis
+mkdir -p dumps/phase1 dumps/phase2 dumps/phase3 dumps/analysis
+mkdir -p models
+mkdir -p scripts/analysis
+```
+
+### 0.4 Script de Captura Automatizado
 
 ```bash
 #!/bin/bash
@@ -41,27 +56,36 @@
 STATE_NAME=$1
 POSITIONS=$2  # formato: "0,0,1,0,0,1"
 BAUDRATE=${3:-2400}
-DURATION=${4:-30}  # segundos de captura
+TIMEOUT=${4:-0.1}
 
-TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-FILENAME="dumps/phase2/${STATE_NAME}_${TIMESTAMP}.csv"
-
-echo "Capturando estado: $STATE_NAME"
+echo "=============================================="
+echo "Captura de estado: $STATE_NAME"
 echo "Posiciones: $POSITIONS"
-echo "Duración: ${DURATION}s"
-echo "Configura el termostato y presiona ENTER para iniciar..."
+echo "=============================================="
+echo ""
+echo "Configura el termostato con el estado indicado"
+echo "y presiona ENTER para iniciar captura..."
 read
 
-python3 USB2RS485.py << EOF
-1
-/dev/ttyUSB0
-$BAUDRATE
-s
-$POSITIONS
-EOF
+echo "Iniciando captura (Ctrl+C para detener)..."
+python3 curryrtool.py device read \
+    -p /dev/ttyUSB0 \
+    -b $BAUDRATE \
+    -t $TIMEOUT \
+    -o "$POSITIONS" \
+    -s
 
-echo "Captura guardada. Presiona ENTER para finalizar..."
+echo ""
+echo "Captura finalizada. Verificar archivos en dumps/"
+ls -lt dumps/*.bin 2>/dev/null | head -5
+echo ""
+echo "Presiona ENTER para continuar..."
 read
+```
+
+Hacer ejecutable:
+```bash
+chmod +x capture.sh
 ```
 
 ---
@@ -70,73 +94,158 @@ read
 
 ### 1.1 Medición de Intervalos entre Tramas
 
-**Objetivo:** Determinar período de transmisión cíclica
+**Objetivo:** Determinar período de transmisión cíclica y jitter
 
 ```python
-# timing_analysis.py
+# scripts/analysis/timing_analysis.py
 import serial
 import time
 import statistics
 
-ser = serial.Serial('/dev/ttyUSB0', 2400, timeout=0.1)
-intervals = []
-last_time = time.time()
+def measure_timing(port='/dev/ttyUSB0', baudrate=2400, samples=100):
+    ser = serial.Serial(port, baudrate, timeout=0.1)
+    intervals = []
+    last_time = time.time()
+    
+    print(f"Midiendo {samples} intervalos... Ctrl+C para detener")
+    try:
+        while len(intervals) < samples:
+            # Leer byte a byte para detectar inicio de trama
+            if ser.read(1):
+                now = time.time()
+                interval = (now - last_time) * 1000  # ms
+                if 10 < interval < 5000:  # Filtrar ruido y gaps largos
+                    intervals.append(interval)
+                    print(f"Intervalo {len(intervals)}: {interval:.2f} ms")
+                last_time = now
+    except KeyboardInterrupt:
+        pass
+    finally:
+        ser.close()
+    
+    if intervals:
+        print(f"\n{'='*50}")
+        print(f"ESTADÍSTICAS DE TIMING")
+        print(f"{'='*50}")
+        print(f"Muestras: {len(intervals)}")
+        print(f"Media: {statistics.mean(intervals):.2f} ms")
+        print(f"Mediana: {statistics.median(intervals):.2f} ms")
+        print(f"Desv. estándar: {statistics.stdev(intervals):.2f} ms")
+        print(f"Min: {min(intervals):.2f} ms")
+        print(f"Max: {max(intervals):.2f} ms")
+        print(f"Jitter (max-min): {max(intervals)-min(intervals):.2f} ms")
+        
+        # Guardar resultados
+        with open('dumps/analysis/timing_stats.txt', 'w') as f:
+            f.write(f"Timing analysis - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Mean: {statistics.mean(intervals):.2f} ms\n")
+            f.write(f"StdDev: {statistics.stdev(intervals):.2f} ms\n")
+            f.write(f"Samples: {len(intervals)}\n")
 
-print("Midiendo intervalos... Ctrl+C para detener")
-try:
-    while len(intervals) < 100:
-        if ser.read(1):
-            now = time.time()
-            interval = (now - last_time) * 1000  # ms
-            if interval > 10:  # Filtrar ruido
-                intervals.append(interval)
-                print(f"Intervalo {len(intervals)}: {interval:.2f} ms")
-            last_time = now
-except KeyboardInterrupt:
-    pass
-
-print(f"\nEstadísticas:")
-print(f"  Muestras: {len(intervals)}")
-print(f"  Media: {statistics.mean(intervals):.2f} ms")
-print(f"  Mediana: {statistics.median(intervals):.2f} ms")
-print(f"  Desv. estándar: {statistics.stdev(intervals):.2f} ms")
-print(f"  Min: {min(intervals):.2f} ms, Max: {max(intervals):.2f} ms")
+if __name__ == '__main__':
+    measure_timing()
 ```
 
-- [ ] Ejecutar script durante 2-3 minutos
+- [ ] Ejecutar durante 2-3 minutos
 - [ ] Anotar período medio de transmisión: _____ ms
 - [ ] Calcular jitter (desviación): _____ ms
+- [ ] **Resultado esperado:** Período cíclico regular, posiblemente 500-2000ms
 
-### 1.2 Medición de Tiempo de Trama
+### 1.2 Análisis de Tamaños de Trama
 
 ```python
-# frame_duration.py
+# scripts/analysis/frame_sizes.py
 import serial
 import time
+from collections import Counter
 
-ser = serial.Serial('/dev/ttyUSB0', 2400, timeout=0.1)
+def analyze_frame_sizes(port='/dev/ttyUSB0', baudrate=2400, duration=60):
+    ser = serial.Serial(port, baudrate, timeout=0.1)
+    sizes = []
+    start_time = time.time()
+    
+    print(f"Analizando tamaños de trama durante {duration}s...")
+    
+    while time.time() - start_time < duration:
+        # Detectar inicio de trama (0x00)
+        byte = ser.read(1)
+        if byte == b'\x00':
+            # Leer resto de la trama
+            data = b'\x00' + ser.read(93)  # Máximo posible
+            if len(data) >= 85:
+                sizes.append(len(data))
+                print(f"Trama detectada: {len(data)} bytes", end='\r')
+    
+    ser.close()
+    
+    print(f"\n\n{'='*50}")
+    print(f"DISTRIBUCIÓN DE TAMAÑOS")
+    print(f"{'='*50}")
+    
+    counter = Counter(sizes)
+    for size, count in sorted(counter.items()):
+        pct = (count / len(sizes)) * 100
+        bar = '█' * int(pct / 2)
+        print(f"{size:2d} bytes: {count:4d} ({pct:5.1f}%) {bar}")
+    
+    print(f"\nTotal tramas: {len(sizes)}")
+    
+    # Guardar resultados
+    with open('dumps/analysis/frame_sizes.txt', 'w') as f:
+        f.write(f"Frame size analysis\n")
+        for size, count in sorted(counter.items()):
+            f.write(f"{size}: {count}\n")
 
-# A 2400 baudios: 1 bit = 416.67 µs
-# 1 byte (8N1) = 10 bits = 4.167 ms
-# 88 bytes = 366.67 ms teóricos
-
-print("Midiendo duración de tramas...")
-for i in range(10):
-    start = time.time()
-    data = ser.read(88)  # Leer una trama completa
-    if len(data) == 88:
-        duration = (time.time() - start) * 1000
-        print(f"Trama {i+1}: {duration:.2f} ms")
+if __name__ == '__main__':
+    analyze_frame_sizes()
 ```
 
-- [ ] Verificar duración teórica vs real
-- [ ] Confirmar que todas las tramas son exactamente 88 bytes
+- [ ] Verificar qué tamaños aparecen (85, 88, 91, 94)
+- [ ] Anotar frecuencia de cada tamaño
+- [ ] **Resultado esperado:** 88 bytes dominante, otros según estado
 
-### 1.3 Análisis de Jitter y Estabilidad
+### 1.3 Validación de Estructura
 
-- [ ] Capturar 100 tramas seguidas sin cambiar controles
-- [ ] Verificar que el contenido es idéntico (bit-perfect) o varía ligeramente
-- [ ] Identificar si hay contador de secuencia o timestamp
+```python
+# scripts/analysis/validate_frames.py
+import json
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from curryrtoolslib.utils import trama as trama_tools
+
+def validate_captured_frames():
+    """Valida todas las tramas capturadas en dumps/"""
+    dumps_folder = 'dumps'
+    
+    info_files = [f for f in os.listdir(dumps_folder) if f.endswith('.info')]
+    
+    print(f"Validando {len(info_files)} capturas...")
+    
+    for info_file in info_files:
+        info_path = os.path.join(dumps_folder, info_file)
+        bin_path = info_path.replace('.info', '.bin')
+        
+        if not os.path.exists(bin_path):
+            print(f"⚠️  Faltan datos binarios para {info_file}")
+            continue
+        
+        # Cargar metadatos
+        with open(info_path) as f:
+            info = json.load(f)
+        
+        # Cargar y validar tramas
+        resultados = trama_tools.cargar_trama_bytes(bin_path)
+        
+        if resultados:
+            print(f"✅ {info_file}: {len(resultados)} tramas válidas")
+        else:
+            print(f"❌ {info_file}: Error de validación")
+
+if __name__ == '__main__':
+    validate_captured_frames()
+```
 
 ---
 
@@ -144,25 +253,26 @@ for i in range(10):
 
 ### 2.1 Captura Base - Todos los Controles en OFF
 
-```
-Estado: TODOS_OFF
-Posiciones: 0,0,0,0,0,0 (fan=stop, cold=off, hot=off, dry=off)
-Archivo: dumps/phase2/ALL_OFF_XXXXXX.csv
-Cantidad: 20 tramas mínimo
+```bash
+# Estado: TODOS_OFF
+./capture.sh "ALL_OFF" "0,0,0,0,0,0"
+
+# O manualmente:
+python3 curryrtool.py device read -p /dev/ttyUSB0 -b 2400 -t 0.1 -o "0,0,0,0,0,0" -s
 ```
 
 - [ ] Apagar termostato o poner en modo standby
-- [ ] Capturar 20 tramas
+- [ ] Capturar mínimo 20 tramas
 - [ ] Verificar consistencia interna
 
 ### 2.2 Variación de Velocidad del Ventilador
 
-| Estado | Posiciones | Archivo Esperado | Prioridad |
-|--------|------------|------------------|-----------|
-| FAN_STOP | 0,0,0,0,0,0 | `FAN_STOP_*.csv` | ⭐⭐⭐ |
-| FAN_LOW | 1,0,0,0,0,0 | `FAN_LOW_*.csv` | ⭐⭐⭐ |
-| FAN_MED | 0,1,0,0,0,0 | `FAN_MED_*.csv` | ⭐⭐⭐ |
-| FAN_HIGH | 0,0,1,0,0,0 | `FAN_HIGH_*.csv` | ⭐⭐⭐ |
+| Estado | Posiciones | Comando | Prioridad |
+|--------|------------|---------|-----------|
+| FAN_STOP | 0,0,0,0,0,0 | `./capture.sh FAN_STOP "0,0,0,0,0,0"` | ⭐⭐⭐ |
+| FAN_LOW | 1,0,0,0,0,0 | `./capture.sh FAN_LOW "1,0,0,0,0,0"` | ⭐⭐⭐ |
+| FAN_MED | 0,1,0,0,0,0 | `./capture.sh FAN_MED "0,1,0,0,0,0"` | ⭐⭐⭐ |
+| FAN_HIGH | 0,0,1,0,0,0 | `./capture.sh FAN_HIGH "0,0,1,0,0,0"` | ⭐⭐⭐ |
 
 Para cada estado:
 - [ ] Configurar termostato (solo cambiar velocidad fan)
@@ -172,12 +282,12 @@ Para cada estado:
 
 ### 2.3 Variación de Modos (con ventilador en MED)
 
-| Estado | Posiciones | Archivo Esperado | Display |
-|--------|------------|------------------|---------|
-| MODE_COOL | 0,1,0,1,0,0 | `MODE_COOL_*.csv` | ❄️ + ventilador |
-| MODE_HEAT | 0,1,0,0,1,0 | `MODE_HEAT_*.csv` | ☀️ + ventilador |
-| MODE_DRY | 0,1,0,0,0,1 | `MODE_DRY_*.csv` | 💧 + ventilador |
-| MODE_FAN | 0,1,0,0,0,0 | `MODE_FAN_*.csv` | Solo ventilador |
+| Estado | Posiciones | Comando | Display |
+|--------|------------|---------|---------|
+| MODE_COOL | 0,1,0,1,0,0 | `./capture.sh MODE_COOL "0,1,0,1,0,0"` | ❄️ + ventilador |
+| MODE_HEAT | 0,1,0,0,1,0 | `./capture.sh MODE_HEAT "0,1,0,0,1,0"` | ☀️ + ventilador |
+| MODE_DRY | 0,1,0,0,0,1 | `./capture.sh MODE_DRY "0,1,0,0,0,1"` | 💧 + ventilador |
+| MODE_FAN | 0,1,0,0,0,0 | `./capture.sh MODE_FAN "0,1,0,0,0,0"` | Solo ventilador |
 
 Para cada modo:
 - [ ] Seleccionar modo en termostato
@@ -186,12 +296,12 @@ Para cada modo:
 
 ### 2.4 Combinaciones Modo + Velocidad
 
-| Estado | Posiciones | Archivo Esperado |
-|--------|------------|------------------|
-| COOL_LOW | 1,0,0,1,0,0 | `COOL_LOW_*.csv` |
-| COOL_HIGH | 0,0,1,1,0,0 | `COOL_HIGH_*.csv` |
-| HEAT_MED | 0,1,0,0,1,0 | `HEAT_MED_*.csv` |
-| DRY_LOW | 1,0,0,0,0,1 | `DRY_LOW_*.csv` |
+| Estado | Posiciones | Comando |
+|--------|------------|---------|
+| COOL_LOW | 1,0,0,1,0,0 | `./capture.sh COOL_LOW "1,0,0,1,0,0"` |
+| COOL_HIGH | 0,0,1,1,0,0 | `./capture.sh COOL_HIGH "0,0,1,1,0,0"` |
+| HEAT_MED | 0,1,0,0,1,0 | `./capture.sh HEAT_MED "0,1,0,0,1,0"` |
+| DRY_LOW | 1,0,0,0,0,1 | `./capture.sh DRY_LOW "1,0,0,0,0,1"` |
 
 - [ ] Capturar combinaciones prioritarias
 
@@ -199,12 +309,12 @@ Para cada modo:
 
 Si el termostato permite ajustar temperatura de consigna:
 
-| Estado | Setpoint | Archivo Esperado |
-|--------|----------|------------------|
-| TEMP_16C | 16°C | `TEMP_16C_*.csv` |
-| TEMP_20C | 20°C | `TEMP_20C_*.csv` |
-| TEMP_24C | 24°C | `TEMP_24C_*.csv` |
-| TEMP_28C | 28°C | `TEMP_28C_*.csv` |
+| Estado | Setpoint | Comando |
+|--------|----------|---------|
+| TEMP_16C | 16°C | `./capture.sh TEMP_16C "0,1,0,1,0,0"` |
+| TEMP_20C | 20°C | `./capture.sh TEMP_20C "0,1,0,1,0,0"` |
+| TEMP_24C | 24°C | `./capture.sh TEMP_24C "0,1,0,1,0,0"` |
+| TEMP_28C | 28°C | `./capture.sh TEMP_28C "0,1,0,1,0,0"` |
 
 - [ ] Capturar con modo COOL + MED fijo, variando solo setpoint
 - [ ] Verificar si el display muestra temperatura ambiente o setpoint
@@ -212,17 +322,21 @@ Si el termostato permite ajustar temperatura de consigna:
 ### 2.6 Script de Análisis Diferencial
 
 ```python
-# diff_analysis.py
-import csv
+# scripts/analysis/diff_analysis.py
+import json
 import os
-from collections import defaultdict
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def load_frame(filepath):
-    """Carga la primera trama de un CSV"""
-    with open(filepath, 'r') as f:
-        reader = csv.DictReader(f, delimiter=';')
-        row = next(reader)
-        return [int(x) for x in row['Trama'].split(',')]
+from curryrtoolslib.utils import trama as trama_tools
+
+def load_first_frame(info_file):
+    """Carga la primera trama de un archivo .info/.bin"""
+    bin_file = info_file.replace('.info', '.bin')
+    resultados = trama_tools.cargar_trama_bytes(bin_file)
+    if resultados:
+        return list(resultados[0]['data'])
+    return None
 
 def compare_frames(frame1, frame2, label1="Base", label2="Target"):
     """Compara dos tramas y muestra diferencias"""
@@ -240,10 +354,38 @@ def compare_frames(frame1, frame2, label1="Base", label2="Target"):
     print(f"Posiciones: {diff_positions}")
     return diff_positions
 
-# Uso:
-# base = load_frame("dumps/phase2/ALL_OFF_xxx.csv")
-# fan_low = load_frame("dumps/phase2/FAN_LOW_xxx.csv")
-# compare_frames(base, fan_low, "ALL_OFF", "FAN_LOW")
+def main():
+    dumps_folder = 'dumps/phase2'
+    
+    # Buscar archivos de estados conocidos
+    states = {
+        'ALL_OFF': None,
+        'FAN_LOW': None,
+        'FAN_MED': None,
+        'FAN_HIGH': None,
+        'MODE_COOL': None,
+        'MODE_HEAT': None,
+        'MODE_DRY': None,
+    }
+    
+    # Cargar tramas
+    for filename in os.listdir(dumps_folder):
+        if filename.endswith('.info'):
+            for state_name in states.keys():
+                if state_name in filename:
+                    filepath = os.path.join(dumps_folder, filename)
+                    states[state_name] = load_first_frame(filepath)
+                    print(f"Cargado {state_name}: {filepath}")
+    
+    # Comparaciones clave
+    if states['ALL_OFF'] and states['FAN_LOW']:
+        compare_frames(states['ALL_OFF'], states['FAN_LOW'], "ALL_OFF", "FAN_LOW")
+    
+    if states['FAN_MED'] and states['MODE_COOL']:
+        compare_frames(states['FAN_MED'], states['MODE_COOL'], "FAN_MED", "MODE_COOL")
+
+if __name__ == '__main__':
+    main()
 ```
 
 - [ ] Ejecutar análisis para cada par de estados
@@ -251,31 +393,34 @@ def compare_frames(frame1, frame2, label1="Base", label2="Target"):
 
 ### 2.7 Matriz de Correlación
 
-Documentar en archivo de texto:
+Documentar en `dumps/analysis/correlation_matrix.md`:
 
-```
-CORRELACIÓN CONTROL → BYTES
-===========================
+```markdown
+# Matriz de Correlación Control → Bytes
 
-FAN Speed (STOP/LOW/MED/HIGH):
-  - Bytes afectados: [_, _, _]
-  - Valores observados:
-    * STOP: 0x__
-    * LOW:  0x__
-    * MED:  0x__
-    * HIGH: 0x__
+## FAN Speed (STOP/LOW/MED/HIGH)
+- Bytes afectados: [_, _, _]
+- Valores observados:
+  * STOP: 0x__
+  * LOW:  0x__
+  * MED:  0x__
+  * HIGH: 0x__
 
-Mode (COOL/HEAT/DRY/FAN):
-  - Bytes afectados: [_, _, _]
-  - Valores observados:
-    * COOL: 0x__
-    * HEAT: 0x__
-    * DRY:  0x__
-    * FAN:  0x__
+## Mode (COOL/HEAT/DRY/FAN)
+- Bytes afectados: [_, _, _]
+- Valores observados:
+  * COOL: 0x__
+  * HEAT: 0x__
+  * DRY:  0x__
+  * FAN:  0x__
 
-Setpoint:
-  - Bytes afectados: [_]
-  - Codificación: Lineal/Tabla/Offset?
+## Setpoint (Temperatura)
+- Bytes afectados: [_]
+- Codificación: Lineal/Tabla/Offset?
+- 16°C: 0x__
+- 20°C: 0x__
+- 24°C: 0x__
+- 28°C: 0x__
 ```
 
 ---
@@ -285,81 +430,145 @@ Setpoint:
 ### 3.1 Identificación de Bytes de Checksum
 
 Candidatos (posiciones que varían "aleatoriamente"):
-- Posición 86: _____
-- Posición 87: _____
+- Posición -2: _____ (penúltimo byte)
+- Posición -1: _____ (último byte)
 
 ### 3.2 Prueba de Algoritmos
 
 ```python
-# checksum_crack.py
+# scripts/analysis/checksum_crack.py
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def crc8_ccitt(data):
-    """CRC-8 CCITT (0x07)"""
-    crc = 0
+from curryrtoolslib.utils import trama as trama_tools
+
+def crc8_ccitt(data, poly=0x07, init=0x00):
+    """CRC-8 CCITT"""
+    crc = init
     for byte in data:
         crc ^= byte
         for _ in range(8):
             if crc & 0x80:
-                crc = (crc << 1) ^ 0x07
+                crc = (crc << 1) ^ poly
             else:
                 crc <<= 1
         crc &= 0xFF
     return crc
 
-def crc8_rohc(data):
-    """CRC-8 ROHC (0x07, init=0xFF)"""
-    crc = 0xFF
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            if crc & 0x80:
-                crc = (crc << 1) ^ 0x07
-            else:
-                crc <<= 1
-        crc &= 0xFF
-    return crc
+def crc8_rohc(data, poly=0x07):
+    """CRC-8 ROHC (init=0xFF)"""
+    return crc8_ccitt(data, poly, init=0xFF)
 
 def test_checksum(frame, checksum_pos=-1):
+    """Prueba múltiples algoritmos contra la trama"""
     data = frame[:checksum_pos]
     expected = frame[checksum_pos]
     
-    tests = {
-        'xor_all': 0,
-        'sum_mod256': sum(data) & 0xFF,
-        'sum_inv': (~sum(data)) & 0xFF,
-        'xor_reduce': 0,
-        'crc8_ccitt': crc8_ccitt(data),
-        'crc8_rohc': crc8_rohc(data),
-        'fletcher8': (sum(data) & 0xFF) ^ ((sum(data) >> 8) & 0xFF),
-    }
+    results = {}
     
-    for name in tests:
-        tests['xor_reduce'] ^= tests['xor_all']
+    # XOR simple
+    xor_val = 0
+    for b in data:
+        xor_val ^= b
+    results['xor_all'] = xor_val
+    results['xor_match'] = xor_val == expected
     
-    return {name: (val == expected) for name, val in tests.items()}
+    # Suma
+    sum_val = sum(data) & 0xFF
+    results['sum_mod256'] = sum_val
+    results['sum_match'] = sum_val == expected
+    
+    # Suma invertida
+    sum_inv = (~sum(data)) & 0xFF
+    results['sum_inv'] = sum_inv
+    results['sum_inv_match'] = sum_inv == expected
+    
+    # Fletcher-8
+    sum1 = sum(data) & 0xFF
+    sum2 = sum(sum(data[:i+1]) for i in range(len(data))) & 0xFF
+    fletcher = (sum1 ^ sum2)
+    results['fletcher8'] = fletcher
+    results['fletcher_match'] = fletcher == expected
+    
+    # CRC-8 con diferentes polinomios
+    polys = [0x07, 0x31, 0x9B, 0xD5, 0xA6, 0xE0]
+    for poly in polys:
+        crc = crc8_ccitt(data, poly)
+        results[f'crc8_0x{poly:02X}'] = crc
+        results[f'crc8_0x{poly:02X}_match'] = crc == expected
+    
+    return results, expected
 
-# Probar con múltiples tramas
-# Si ninguno coincide, probar con polinomios: 0x31, 0x9B, 0xD5
+def analyze_frames():
+    """Analiza todas las tramas capturadas"""
+    dumps_folder = 'dumps/phase2'
+    
+    for filename in os.listdir(dumps_folder):
+        if not filename.endswith('.info'):
+            continue
+        
+        bin_path = os.path.join(dumps_folder, filename.replace('.info', '.bin'))
+        resultados = trama_tools.cargar_trama_bytes(bin_path)
+        
+        if not resultados:
+            continue
+        
+        print(f"\n{'='*60}")
+        print(f"Analizando: {filename}")
+        print(f"{'='*60}")
+        
+        # Usar primera trama como referencia
+        frame = list(resultados[0]['data'])
+        
+        results, expected = test_checksum(frame)
+        
+        print(f"Checksum esperado: 0x{expected:02X}")
+        print("\nResultados:")
+        for key, val in results.items():
+            if key.endswith('_match'):
+                status = "✅" if val else "❌"
+                algo = key.replace('_match', '')
+                print(f"  {status} {algo}: 0x{results[algo]:02X}")
+
+if __name__ == '__main__':
+    analyze_frames()
 ```
 
-- [ ] Probar CRC-8 con polinomios: 0x07, 0x31, 0x9B, 0xD5, 0xA6
+- [ ] Probar CRC-8 con polinomios: 0x07, 0x31, 0x9B, 0xD5, 0xA6, 0xE0
 - [ ] Probar checksum por bloques (cada bloque entre 0x00 tiene su propio CRC)
 - [ ] Probar XOR acumulativo con inicialización != 0
 
 ### 3.3 Análisis de Mutación
 
 ```python
-# Mutar un bit y observar cambio en checksum
-def mutate_and_check(original, position):
-    """Muta un byte y compara checksum resultante"""
-    mutated = original.copy()
-    mutated[position] ^= 0x01  # Flip LSB
+# scripts/analysis/mutation_analysis.py
+
+def mutate_and_compare(original, position, all_frames):
+    """Muta un byte y compara cómo cambia el checksum"""
+    print(f"\nMutación en posición {position}:")
     
-    orig_crc = original[-1]
-    mut_crc = mutated[-1]
+    # Buscar tramas que difieran solo en esa posición
+    candidates = []
+    for frame in all_frames:
+        diff_count = sum(1 for a, b in zip(original, frame) if a != b)
+        if diff_count == 1:  # Difieren en un solo byte
+            diff_pos = next(i for i, (a, b) in enumerate(zip(original, frame)) if a != b)
+            if diff_pos == position:
+                candidates.append((original[position], frame[position], frame[-1]))
     
-    print(f"Mutación pos {position}: CRC 0x{orig_crc:02X} → 0x{mut_crc:02X}")
-    print(f"  Diferencia: 0x{(orig_crc ^ mut_crc):02X}")
+    if candidates:
+        print(f"  Encontradas {len(candidates)} tramas relacionadas")
+        for orig_val, new_val, crc in candidates:
+            crc_diff = crc ^ original[-1]
+            print(f"  0x{orig_val:02X} → 0x{new_val:02X}: CRC diff = 0x{crc_diff:02X}")
+            
+            # Si crc_diff es lineal con el cambio, probablemente es XOR
+            val_diff = orig_val ^ new_val
+            if crc_diff == val_diff:
+                print(f"    → Patrón XOR detectado!")
+            elif crc_diff == (new_val - orig_val) & 0xFF:
+                print(f"    → Patrón de suma detectado!")
 ```
 
 - [ ] Mutar cada byte de datos y observar efecto en checksum
@@ -373,16 +582,15 @@ def mutate_and_check(original, position):
 ### 4.1 Construcción de Parser CCN
 
 ```python
-# ccn_parser.py
+# scripts/ccn_parser.py
 
 class CCNFrame:
-    """Parser de trama CCN de 88 bytes"""
+    """Parser de trama CCN"""
     
-    # Offset mapping (actualizar tras análisis)
-    OFFSET_FAN = 3      # Hipótesis
-    OFFSET_MODE = 7     # Hipótesis
-    OFFSET_TEMP = 13    # Hipótesis
-    OFFSET_CRC = 86     # Hipótesis
+    # Offset mapping (actualizar tras análisis completo)
+    OFFSET_FAN = 3
+    OFFSET_MODE = 7
+    OFFSET_TEMP = 13
     
     FAN_VALUES = {
         0x21: 'STOP',
@@ -399,31 +607,47 @@ class CCNFrame:
     }
     
     def __init__(self, data):
-        if len(data) != 88:
-            raise ValueError(f"Trama debe ser 88 bytes, recibido {len(data)}")
-        self.data = data
+        self.data = list(data) if isinstance(data, bytes) else data
+        self.size = len(self.data)
     
     def parse(self):
         return {
+            'size': self.size,
             'fan_speed': self.FAN_VALUES.get(self.data[self.OFFSET_FAN], 'UNKNOWN'),
             'mode': self.MODE_VALUES.get(self.data[self.OFFSET_MODE], 'UNKNOWN'),
-            'raw': self.data,
-            'valid_crc': self._verify_crc(),
+            'header_valid': self.data[0:3] == [0x00, 0x00, 0x08],
+            'raw_hex': ' '.join(f'{b:02X}' for b in self.data[:16]) + '...',
         }
     
-    def _verify_crc(self):
-        # Implementar tras descubrir algoritmo
-        return True
+    def __str__(self):
+        parsed = self.parse()
+        return f"CCN Frame ({parsed['size']}b): {parsed['fan_speed']} / {parsed['mode']}"
+
+# Uso:
+# frame = CCNFrame(data)
+# print(frame.parse())
 ```
 
 ### 4.2 Generador de Tramas
 
 ```python
-# ccn_generator.py
+# scripts/ccn_generator.py
 
-def generate_frame(fan='MED', mode='COOL', temp=22):
+def calculate_crc(data, algorithm='unknown'):
+    """Calcula checksum según algoritmo descubierto"""
+    if algorithm == 'xor':
+        crc = 0
+        for b in data:
+            crc ^= b
+        return crc
+    elif algorithm.startswith('crc8'):
+        # Implementar según descubrimiento
+        pass
+    return 0x00  # Placeholder
+
+def generate_frame(fan='MED', mode='COOL', temp=22, size=88):
     """Genera una trama CCN con los parámetros dados"""
-    frame = bytearray(88)
+    frame = [0] * size
     
     # Header fijo
     frame[0:3] = [0x00, 0x00, 0x08]
@@ -432,49 +656,57 @@ def generate_frame(fan='MED', mode='COOL', temp=22):
     fan_map = {'STOP': 0x21, 'LOW': 0x61, 'MED': 0x63, 'HIGH': 0x68}
     frame[3] = fan_map.get(fan, 0x63)
     
-    # Mode (actualizar valores reales)
+    # Mode (actualizar valores reales tras análisis)
     mode_map = {'IDLE': 0x69, 'COOL': 0x28, 'HEAT': 0x68, 'DRY': 0x6B}
     frame[7] = mode_map.get(mode, 0x28)
     
-    # Resto de campos (copiar de trama de referencia)
+    # Resto de campos (copiar de trama de referencia o calcular)
     # ... completar según análisis
     
     # Calcular y añadir CRC
-    frame[86] = calculate_crc(frame[:86])
-    frame[87] = 0x08  # Separador final?
+    frame[-2] = calculate_crc(frame[:-2])
+    frame[-1] = 0x08  # Separador final
     
     return bytes(frame)
+
+# Uso:
+# frame = generate_frame(fan='MED', mode='COOL', size=88)
 ```
 
 ### 4.3 Prueba de Emulación
 
-```python
-# emulation_test.py
-import serial
-import time
-
-ser = serial.Serial('/dev/ttyUSB0', 2400, timeout=1)
-
-# Generar trama emulada
-frame = generate_frame(fan='MED', mode='COOL')
-
-print("Transmitiendo trama emulada...")
-for i in range(10):
-    ser.write(frame)
-    time.sleep(0.5)  # Ajustar según período medido
-
-print("Tramas enviadas. Verificar si el NTC reacciona.")
+```bash
+# Usar el comando write de curryrtool
+python3 curryrtool.py device write \
+    -p /dev/ttyUSB0 \
+    -b 2400 \
+    -t 0.1 \
+    -f dumps/phase2/FAN_MED_<uuid>.bin \
+    -r 10 \
+    -i 1
 ```
 
-- [ ] Transmitir trama emulada y observar reacción del NTC
+**Verificación:**
+- [ ] Transmitir trama emulada
+- [ ] Observar si el NTC reacciona (cambia display, activa relés, etc.)
 - [ ] Si el NTC acepta la trama → checksum correcto
 - [ ] Si no hay reacción → revisar checksum o estructura
 
 ### 4.4 Integración con ML
 
-- [ ] Actualizar `trainning_tools.py` con mapeo de bytes conocidos
-- [ ] Entrenar modelo con dataset completo de estados
+```bash
+# Entrenar modelo con todas las capturas
+python3 curryrtool.py trainning entrenar epocas=20000 save
+
+# Probar predicción
+python3 curryrtool.py trainning prediccion \
+    modelo=models/modelo.keras \
+    trama=0,0,8,8,33,33,...
+```
+
+- [ ] Actualizar modelo con dataset completo de estados
 - [ ] Validar precisión de predicción > 95%
+- [ ] Documentar qué bytes son más relevantes para el modelo
 
 ---
 
@@ -482,54 +714,68 @@ print("Tramas enviadas. Verificar si el NTC reacciona.")
 
 ### Registro de Capturas
 
-| Fase | Estado | Fecha | Archivo | Tramas | Notas |
-|------|--------|-------|---------|--------|-------|
-| 2.1 | ALL_OFF | | | | |
-| 2.2 | FAN_STOP | | | | |
-| 2.2 | FAN_LOW | | | | |
-| 2.2 | FAN_MED | | | | |
-| 2.2 | FAN_HIGH | | | | |
-| 2.3 | MODE_COOL | | | | |
-| 2.3 | MODE_HEAT | | | | |
-| 2.3 | MODE_DRY | | | | |
+| Fase | Estado | Fecha | Archivo | Tramas | Tamaño | Notas |
+|------|--------|-------|---------|--------|--------|-------|
+| 2.1 | ALL_OFF | | | | | |
+| 2.2 | FAN_STOP | | | | | |
+| 2.2 | FAN_LOW | | | | | |
+| 2.2 | FAN_MED | | | | | |
+| 2.2 | FAN_HIGH | | | | | |
+| 2.3 | MODE_COOL | | | | | |
+| 2.3 | MODE_HEAT | | | | | |
+| 2.3 | MODE_DRY | | | | | |
 
 ### Descubrimientos Clave
 
-```
-[Fecha] - Hallazgo: Los bytes 3-5 codifican velocidad del ventilador
-[Fecha] - Hallazgo: El checksum es CRC-8 con polinomio 0x__
-[Fecha] - Hallazgo: La temperatura se codifica en posición __
+```markdown
+## Log de Descubrimientos
+
+### 2026-03-XX
+- **Hallazgo:** Los bytes 3-5 codifican velocidad del ventilador
+- **Evidencia:** FAN_LOW=0x61, FAN_MED=0x63, FAN_HIGH=0x68
+- **Archivo:** dumps/phase2/FAN_*.info
+
+### 2026-03-XX
+- **Hallazgo:** El checksum es CRC-8 con polinomio 0x__
+- **Evidencia:** Verificación en 100 tramas
+- **Script:** checksum_crack.py
+
+### 2026-03-XX
+- **Hallazgo:** La temperatura se codifica en posición __
+- **Evidencia:** Correlación 0x__ = 20°C, 0x__ = 24°C
 ```
 
 ---
 
-## 🔧 Herramientas Adicionales
+## 🔧 Herramientas Rápidas
 
-### Visualización Hexadecimal en Tiempo Real
+### Ver Tramas en Tiempo Real
 
 ```bash
-# Ver tramas en tiempo real en formato hex
 python3 -c "
 import serial
 ser = serial.Serial('/dev/ttyUSB0', 2400, timeout=0.1)
 while True:
     data = ser.read(88)
-    if len(data) == 88:
-        print(' '.join(f'{b:02X}' for b in data[:16]))
+    if len(data) >= 85:
+        print(' '.join(f'{b:02X}' for b in data[:16]), f'... ({len(data)}b)')
 "
 ```
 
-### Decodificador Rápido
+### Decodificar Última Captura
 
 ```bash
-# Decodificar un CSV recién capturado
 python3 -c "
-import csv, sys
-with open(sys.argv[1]) as f:
-    row = next(csv.DictReader(f, delimiter=';'))
-    frame = [int(x) for x in row['Trama'].split(',')]
-    print('Frame:', ' '.join(f'{b:02X}' for b in frame))
-" dumps/phase2/ARCHIVO.csv
+import os, json, glob
+files = glob.glob('dumps/*.info')
+latest = max(files, key=os.path.getctime)
+with open(latest) as f:
+    info = json.load(f)
+print(f'Archivo: {latest}')
+print(f'Valores: {info[\"values\"]}')
+print(f'Tramas: {info[\"blocks\"]}')
+print(f'Tamaño: {info[\"times\"][0][1]} bytes')
+"
 ```
 
 ---
@@ -550,7 +796,17 @@ with open(sys.argv[1]) as f:
 - [ ] Implementar control remoto completo del NTC
 - [ ] Integrar con sistema de automatización (Home Assistant, etc.)
 - [ ] Documentación completa del protocolo CCN para CRC2-NTC
+- [ ] Publicar especificación del protocolo
 
 ---
 
-*Checklist v1.0 - Proyecto TermostatoAC-Carrier*
+## 📚 Referencias
+
+- `AGENTS.md` - Documentación completa de la arquitectura
+- `CCN_PROTOCOL_ANALYSIS.md` - Análisis técnico detallado
+- `curryrtoolslib/utils/trama.py` - Código de manejo de tramas
+- `curryrtoolslib/interfaces/devices_interface.py` - Captura y emulación
+
+---
+
+*Checklist v2.0 - Actualizado para arquitectura curryrtoolslib (Marzo 2026)*

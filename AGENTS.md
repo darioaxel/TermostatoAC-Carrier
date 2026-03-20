@@ -5,9 +5,9 @@
 Este proyecto tiene como objetivo analizar los datos emitidos por el termostato **Carrier CRC2-NTC** (un modelo obsoleto) mediante comunicación RS485, con el fin de entender su funcionamiento interno y eventualmente reemplazarlo con un dispositivo compatible que permita programación avanzada, acceso remoto y una interfaz moderna.
 
 El proyecto combina:
-- **Comunicación Serial**: Lectura de datos del termostato vía USB-RS485
-- **Machine Learning**: Entrenamiento de modelos neuronales para predecir el estado del termostato a partir de las tramas de datos
-- **Análisis de Datos**: Procesamiento y visualización de las tramas hexadecimales
+- **Comunicación Serial**: Lectura y escritura de datos del termostato vía USB-RS485
+- **Machine Learning**: Entrenamiento de modelos neuronales para predecir el estado del termostato
+- **Análisis de Protocolos**: Ingeniería inversa del protocolo CCN (Carrier Comfort Network)
 
 ---
 
@@ -19,7 +19,7 @@ El proyecto combina:
   - `tensorflow` / `keras` - Entrenamiento de modelos de machine learning
   - `numpy` - Procesamiento numérico
   - `matplotlib` - Visualización de gráficos
-  - `tensorflow-datasets` - Carga de datasets (referencia)
+  - `optparse` - Interfaz de línea de comandos
 
 ---
 
@@ -27,67 +27,110 @@ El proyecto combina:
 
 ```
 TermostatoAC-Carrier/
-├── USB2RS485.py          # Script principal de comunicación serial
-├── trainning_tools.py    # CLI para entrenamiento y predicción
-├── ia_tools.py           # Utilidades de TensorFlow/Keras
-├── graphics_tools.py     # Visualización de predicciones
-├── curryrtoolslib/       # Paquete Python (estructura preparada, casi vacía)
-│   ├── loader/           # (vacío, solo __pycache__)
-│   └── utils/            # (vacío, solo __pycache__)
-├── dumps/                # Datos capturados del termostato (CSV)
-├── images/               # Documentación visual (fotos, diagramas)
-├── CH341SER/             # Drivers para el adaptador USB-RS485
-├── README.md             # Documentación en inglés
-├── README_es.md          # Documentación en español (principal)
-└── .gitignore            # Excluye: *.zip, CH341SER, dumps, models, __pycache__
+├── curryrtool.py              # Entry point principal de la aplicación
+├── curryrtoolslib/            # Paquete Python con la lógica completa
+│   ├── interfaces/            # Interfaces de usuario (CLI)
+│   │   ├── common_interface.py      # Clase base para interfaces
+│   │   ├── devices_interface.py     # Comunicación serial (read/write/repeat)
+│   │   └── trainning_interface.py   # Entrenamiento y predicción ML
+│   ├── utils/                 # Utilidades
+│   │   ├── ia.py              # Funciones TensorFlow/Keras
+│   │   ├── trama.py           # Gestión de tramas (85/88/91/94 bytes)
+│   │   ├── graphics.py        # Visualización de datos
+│   │   └── config.py          # Gestión de configuración
+│   ├── loader/                # Bootstrap y entry points
+│   │   ├── main.py            # Inicialización de la aplicación
+│   │   └── entry_points.py    # Router de comandos
+│   └── __init__.py            # Configuración global
+├── dumps/                     # Datos capturados del termostato
+│   ├── *.bin                  # Tramas en formato binario
+│   └── *.info                 # Metadatos JSON de las tramas
+├── models/                    # Modelos entrenados (Keras .keras)
+├── images/                    # Documentación visual (fotos, diagramas)
+├── CH341SER/                  # Drivers para el adaptador USB-RS485
+├── README.md                  # Documentación en inglés
+├── README_es.md               # Documentación en español (principal)
+├── CCN_PROTOCOL_ANALYSIS.md   # Análisis técnico del protocolo CCN
+├── CHECKLIST.md               # Guía de ingeniería inversa
+└── .gitignore                 # Excluye: *.zip, CH341SER, dumps, models, __pycache__
 ```
 
 ---
 
 ## Módulos Principales
 
-### 1. USB2RS485.py
-**Propósito**: Interfaz de comunicación con el termostato vía RS485.
+### 1. curryrtool.py (Entry Point)
+**Propósito**: Punto de entrada principal de la aplicación.
 
-**Funciones clave**:
-- `read_serial_data()` - Lee datos del puerto serie y opcionalmente guarda en CSV
-- `detect_baud_rate()` - Detecta automáticamente la velocidad de transmisión
-- `measure_time_between_messages()` - Mide intervalos entre mensajes
-- `calculate_message_size()` - Calcula tamaño de mensajes
-- `main_menu()` - Menú interactivo CLI
-
-**Uso típico**:
+**Uso**:
 ```bash
-python3 USB2RS485.py
-# Seleccionar opción 1 para lectura de datos
-# Por defecto: puerto /dev/ttyUSB0, baudrate 2400
+python3 curryrtool.py <comando> <acción> [opciones]
 ```
 
-**Formato de salida (dumps/)**:
-- Archivos CSV con nombre: `datos_hex_{baudrate}_{posiciones}_{timestamp}.csv`
-- Estructura: columna "Trama" (valores hexadecimales separados por comas) y "Posiciones" (estado de los controles)
-- Las tramas tienen 91 bytes de longitud (padded con ceros si es necesario)
+**Comandos disponibles**:
+- `device` - Operaciones de comunicación serial
+- `trainning` - Entrenamiento y predicción ML
 
-### 2. trainning_tools.py
-**Propósito**: Interfaz de línea de comandos para entrenamiento y predicción.
+---
+
+### 2. devices_interface.py
+**Propósito**: Interfaz completa de comunicación con el termostato.
 
 **Acciones disponibles**:
 
-| Acción | Descripción | Parámetros |
-|--------|-------------|------------|
-| `entrenar` | Entrena un modelo neuronal | `epocas=`, `modelo=`, `dataset=`, `layers=`, `neuronas=`, `save` |
-| `prediccion` | Predice estado a partir de trama | `modelo=`, `trama=` |
+| Acción | Descripción | Parámetros requeridos |
+|--------|-------------|----------------------|
+| `menu` | Menú interactivo CLI | - |
+| `read` | Lee datos del puerto serie | `-p`, `-b`, `-t`, `-o` |
+| `write` | Envía trama al termostato | `-p`, `-b`, `-t`, `-f`, `-r`, `-i` |
+| `repeat` | Modo repetidor (sniffer) | `-p`, `-r`, `-b`, `-t` |
+
+**Ejemplos**:
+
+```bash
+# Leer datos y guardar en archivo
+python3 curryrtool.py device read -p /dev/ttyUSB0 -b 2400 -t 0.1 -o "0,0,1,0,0,1"
+
+# Enviar trama previamente capturada
+python3 curryrtool.py device write -p /dev/ttyUSB0 -b 2400 -t 0.1 \
+    -f dumps/trama.bin -r 30 -i 5
+
+# Modo repetidor (lee de un puerto y reenvía a otro)
+python3 curryrtool.py device repeat -p /dev/ttyUSB0 -r /dev/ttyUSB1 -b 2400 -t 0.1
+```
+
+**Parámetros de línea de comandos**:
+- `-p, --port`: Puerto serial (default: `/dev/ttyUSB0`)
+- `-b, --baudrate`: Velocidad en baudios (default: `2400`)
+- `-t, --timeout`: Timeout de lectura en segundos (default: `0.1`)
+- `-o, --posiciones`: Estado de los controles, formato "FAN1,FAN2,FAN3,COLD,HOT,DRY"
+- `-f, --tramafile`: Archivo de trama a enviar (formato .bin)
+- `-r, --repeticiones`: Número de veces a enviar la trama
+- `-i, --intervalo`: Tiempo entre envíos en segundos
+- `-s, --savefile`: Guardar datos capturados (default: True)
+
+---
+
+### 3. trainning_interface.py
+**Propósito**: Interfaz de entrenamiento y predicción con Machine Learning.
+
+**Acciones disponibles**:
+
+| Acción | Descripción |
+|--------|-------------|
+| `entrenar` | Entrena un modelo neuronal con datos capturados |
+| `prediccion` | Predice estado a partir de una trama |
 
 **Ejemplos**:
 ```bash
 # Entrenar nuevo modelo
-python3 trainning_tools.py entrenar epocas=20000 layers=1 neuronas=10 save
+python3 curryrtool.py trainning entrenar epocas=20000 layers=1 neuronas=79 save
 
 # Entrenar modelo existente
-python3 trainning_tools.py entrenar modelo=models/mi_modelo.keras epocas=5000 save
+python3 curryrtool.py trainning entrenar modelo=models/mi_modelo.keras epocas=5000 save
 
 # Realizar predicción
-python3 trainning_tools.py prediccion modelo=models/modelo_20241128_120059_10.keras trama=0,0,8,8,97,9...
+python3 curryrtool.py trainning prediccion modelo=models/modelo.keras trama=0,0,8,8,97,9...
 ```
 
 **Clases de salida** (6 valores binarios):
@@ -96,52 +139,113 @@ python3 trainning_tools.py prediccion modelo=models/modelo_20241128_120059_10.ke
 - `hot` - Modo calor activo
 - `dry` - Modo seco activo
 
-### 3. ia_tools.py
+---
+
+### 4. trama.py
+**Propósito**: Gestión y procesamiento de tramas del protocolo CCN.
+
+**Funciones principales**:
+- `validar_trama_bytes()` - Valida estructura de trama (header `0x00, 0x08`)
+- `guardar_trama_bytes()` - Guarda trama en formato binario (.bin) + metadatos (.info)
+- `cargar_trama_bytes()` - Carga trama desde archivo binario
+- `normalizar_datos()` - Prepara datos para entrada a la red neuronal
+- `normalizar_bloque()` - Elimina bytes no necesarios (delimitadores)
+
+**Tamaños de trama soportados**: 85, 88, 91, 94 bytes
+
+**Formato de almacenamiento**:
+```
+dumps/
+├── <uuid>.bin       # Datos binarios crudos de la trama
+└── <uuid>.info      # Metadatos JSON (timestamp, baudrate, valores, etc.)
+```
+
+---
+
+### 5. ia.py
 **Propósito**: Funciones de bajo nivel para TensorFlow/Keras.
 
 **Funciones principales**:
 - `init_modelo()` - Crea modelo secuencial con capas Dense
-  - Input: (91, 1) - trama de 91 bytes
+  - Input: Variable (85/88/91/94 bytes normalizados)
   - Output: 6 neuronas (sigmoid) - estados binarios
   - Optimizador: Adam
   - Loss: mean_squared_error
 - `load_modelo()` / `save_modelo()` - Persistencia de modelos
 - `entrenar_datos()` - Wrapper de model.fit()
-- `predecir()` - Realiza predicciones y muestra resultados formateados
+- `predecir()` - Realiza predicciones
 
-### 4. graphics_tools.py
-**Propósito**: Visualización de resultados del modelo.
+---
 
-**Funciones**:
-- `genera_predicciones()` - Muestra grid de predicciones vs valores reales
-- `mostrar_graf()` - Gráfica de precisión y pérdida durante entrenamiento
+### 6. config.py
+**Propósito**: Gestión centralizada de configuración.
+
+**Almacenamiento**: `~/.config/curryrtools/config.ini`
+
+**Configuraciones por defecto**:
+```ini
+[CONFIG]
+dumpsfolder = dumps
+modelofolder = models
+port = /dev/ttyUSB0
+baudrate = 2400
+timeout = 0.1
+posiciones = 000000
+savefile = s
+repeticionesenvio = 30
+portsalida = /dev/ttyUSB1
+neuronasfirstlayer = 79
+```
 
 ---
 
 ## Flujo de Trabajo Típico
 
-1. **Captura de datos**:
-   ```bash
-   python3 USB2RS485.py
-   # Opción 1 → Guardar con posiciones de controles (ej: 010100)
-   ```
+### 1. Captura de Datos
 
-2. **Entrenamiento**:
-   ```bash
-   python3 trainning_tools.py entrenar epocas=20000 save
-   # Modelo guardado en models/modelo_{timestamp}_{epocas}.keras
-   ```
+```bash
+# Capturar datos con estado específico del termostato
+python3 curryrtool.py device read -p /dev/ttyUSB0 -b 2400 -t 0.1 -o "0,1,0,1,0,0"
 
-3. **Predicción**:
-   ```bash
-   python3 trainning_tools.py prediccion modelo=models/modelo_xxx.keras trama=0,0,8,...
-   ```
+# Los archivos se guardan en dumps/ como:
+# - <uuid>.bin (datos binarios)
+# - <uuid>.info (metadatos JSON)
+```
+
+### 2. Entrenamiento
+
+```bash
+# Entrenar modelo con todos los datos capturados
+python3 curryrtool.py trainning entrenar epocas=20000 save
+
+# Modelo guardado en models/modelo_{timestamp}_{epocas}.keras
+```
+
+### 3. Predicción
+
+```bash
+# Predecir estado desde línea de comandos
+python3 curryrtool.py trainning prediccion modelo=models/modelo.keras trama=0,0,8,...
+
+# O usar el modo interactivo
+python3 curryrtool.py trainning menu
+```
+
+### 4. Emulación (Repetición de Tramas)
+
+```bash
+# Reproducir trama capturada para emular el termostato
+python3 curryrtool.py device write \
+    -p /dev/ttyUSB0 -b 2400 -t 0.1 \
+    -f dumps/<uuid>.bin -r 100 -i 0.5
+```
 
 ---
 
 ## Configuración del Entorno
 
 ### Permisos de dispositivo (Linux)
+
 Para acceder al puerto USB sin sudo:
 ```bash
 sudo usermod -a -G dialout $USER
@@ -149,16 +253,19 @@ sudo usermod -a -G dialout $USER
 ```
 
 ### Hardware requerido
+
 - Adaptador USB a RS485 (basado en CH341)
 - Conexión al termostato:
   - P (Power) → 12V
   - G (Ground) → GND
-  - C (Data) → B- del adaptador
+  - C (Data) → A/B del adaptador (verificar polaridad)
 
 ### Parámetros de comunicación
+
 - Puerto por defecto: `/dev/ttyUSB0`
 - Baudrate: 2400 (detectado automáticamente)
-- Timeout: 1 segundo
+- Timeout: 0.1 segundos (configurable)
+- Tamaños de trama: 85, 88, 91, 94 bytes (según estado del termostato)
 
 ---
 
@@ -166,9 +273,10 @@ sudo usermod -a -G dialout $USER
 
 - **Idioma**: Código y comentarios en español
 - **Nombres de variables**: snake_case (ej: `datos_entrenamiento`, `nombre_modelo`)
-- **Constantes globales**: UPPER_CASE (ej: `LISTA_CLASES`, `TAMANO_LOTE`)
+- **Constantes globales**: UPPER_CASE (ej: `VALID_SIZES`, `CONFIG`)
 - **Encoding**: UTF-8
 - **Indentación**: 4 espacios
+- **Type hints**: Uso de anotaciones de tipo (`List[int]`, `Dict[str, Any]`)
 
 ---
 
@@ -177,7 +285,7 @@ sudo usermod -a -G dialout $USER
 **Nota importante**: El proyecto no incluye archivo `requirements.txt` ni `pyproject.toml`. Las dependencias deben instalarse manualmente:
 
 ```bash
-pip install pyserial tensorflow numpy matplotlib tensorflow-datasets
+pip install pyserial tensorflow numpy matplotlib
 ```
 
 ---
@@ -188,23 +296,37 @@ Actualmente **no hay tests automatizados**. El proyecto se prueba de forma manua
 - Verificación de lectura de datos en tiempo real
 - Comprobación visual de gráficas de entrenamiento
 - Validación de predicciones contra estados conocidos
+- Pruebas de emulación con tramas capturadas
 
 ---
 
 ## Estructura de Datos
 
-### Formato CSV (dumps/)
-```csv
-Trama;Posiciones
-0,0,8,8,33,33,...;0,0,1,0,0,1
+### Formato Binario (dumps/*.bin + *.info)
+
+**Archivo .bin**: Datos crudos de la trama (88 bytes típicamente)
+
+**Archivo .info** (JSON):
+```json
+{
+    "stream": "dumps/<uuid>.bin",
+    "blocks": 10,
+    "timeout": 0.1,
+    "baudrate": 2400,
+    "times": [["2024-11-27T21:16:00", 88], ...],
+    "uuid": "<uuid>",
+    "values": "0,0,1,0,0,1"
+}
 ```
 
-- **Trama**: Valores decimales de bytes (0-255), 91 elementos
-- **Posiciones**: 6 valores binarios separados por comas:
+### Campos de valores
+
+- **values**: 6 valores binarios separados por comas:
   - `[fan1, fan2, fan3, cold, hot, dry]`
   - Ejemplo `0,0,1,0,0,1` = Fan medio, Dry activo
 
 ### Modelos entrenados
+
 - Guardados en carpeta `models/` (creada automáticamente)
 - Formato: Keras (.keras)
 - Convención de nombres: `modelo_{YYYYMMDD}_{HHMMSS}_{epocas}.keras`
@@ -213,21 +335,40 @@ Trama;Posiciones
 
 ## Consideraciones de Seguridad
 
-- El script `USB2RS485.py` requiere acceso al puerto serie (`/dev/ttyUSB0`)
+- El módulo `devices_interface.py` requiere acceso al puerto serie (`/dev/ttyUSB0`)
 - Los datos del termostato no contienen información sensible
 - Los modelos entrenados se guardan localmente
+- **Precaución**: El modo `write` puede alterar el estado del termostato si se conecta a un bus con otros dispositivos
 
 ---
 
 ## Notas para Desarrolladores
 
-1. **CurryRToolsLib**: El paquete `curryrtoolslib/` está estructurado como librería Python pero actualmente no contiene implementaciones (solo `__pycache__`). Es una estructura preparada para futura modularización.
+1. **CurryRToolsLib**: El paquete `curryrtoolslib/` ahora contiene implementación completa. La refactorización desde scripts sueltos a paquete estructurado está terminada.
 
-2. **Datos de entrenamiento**: El modelo espera tramas de exactamente 91 bytes. Los datos se normalizan dividiendo por 255 (conversión a float 0-1).
+2. **Múltiples tamaños de trama**: El protocolo CCN genera tramas de diferentes tamaños según el estado:
+   - 85 bytes: Estados simples
+   - 88 bytes: Estados con modo activo (cool/heat/dry)
+   - 91 bytes: Estados extendidos
+   - 94 bytes: Estados complejos o con sensores adicionales
 
-3. **Arquitectura del modelo**: Red neuronal secuencial con:
-   - Capa Flatten (input: 91x1)
+3. **Normalización**: Los datos se normalizan dividiendo por 255 (conversión a float 0-1) antes de entrar a la red neuronal.
+
+4. **Arquitectura del modelo**: Red neuronal secuencial con:
+   - Capa de entrada variable según tamaño de trama
    - 1-N capas Dense con activación ReLU
    - Capa de salida Dense(6, sigmoid)
 
-4. **Dataset mínimo**: Se recomienda recolectar múltiples archivos CSV en `dumps/` con diferentes estados del termostato para un entrenamiento efectivo.
+5. **Modo repetidor**: La funcionalidad `repeat` permite usar el adaptador como puente/sniffer entre dos puertos serie.
+
+---
+
+## Referencias de Documentación Adicional
+
+- `CCN_PROTOCOL_ANALYSIS.md` - Análisis técnico detallado del protocolo Carrier Comfort Network
+- `CHECKLIST.md` - Guía paso a paso para ingeniería inversa del protocolo
+- `README_es.md` - Documentación general del proyecto
+
+---
+
+*Documento actualizado para reflejar la arquitectura actual del proyecto (Marzo 2026)*

@@ -2,7 +2,8 @@
 
 > **Proyecto:** Reverse Engineering del Termostato Carrier CRC2-NTC  
 > **Fecha:** Marzo 2026  
-> **Arquitectura de Hardware:** 3 hilos (+12V, GND, Datos)
+> **Arquitectura de Hardware:** 3 hilos (+12V, GND, Datos)  
+> **Versión del Documento:** 2.0 (actualizado para arquitectura actual)
 
 ---
 
@@ -39,14 +40,33 @@ Conexión de 3 hilos:
 | **Bits de datos** | 8 | Estándar RS-485 |
 | **Paridad** | Ninguna | No detectada |
 | **Bits de parada** | 1 | Inferido |
-| **Longitud de trama** | **88 bytes** | Fija, sin variación |
-| **Intervalo entre tramas** | *Pendiente de medición* | ~cientos de ms estimado |
+| **Longitud de trama** | **Variable: 85/88/91/94 bytes** | Dependiendo del estado del termostato |
+| **Timeout recomendado** | 0.1 segundos | Configurado en `curryrtoolslib/utils/config.py` |
+
+> **Nota importante:** A diferencia de lo documentado inicialmente (88 bytes fijos), el protocolo CCN genera tramas de **múltiples tamaños**. Ver sección 2.3.
 
 ---
 
-## 3. Estructura de la Trama (88 bytes)
+## 3. Estructura de la Trama
 
-### 3.1 Diagrama de la Trama
+### 3.1 Múltiples Tamaños de Trama
+
+El protocolo CCN del CRC2-NTC genera tramas de diferentes longitudes según la complejidad del estado:
+
+| Tamaño | Contexto detectado | Frecuencia |
+|--------|-------------------|------------|
+| **85 bytes** | Estados simples (fan only) | Baja |
+| **88 bytes** | Estados con modo activo (cool/heat/dry) | **Alta** |
+| **91 bytes** | Estados extendidos | Media |
+| **94 bytes** | Estados complejos/con sensores | Baja |
+
+**Validación en código:**
+```python
+# De curryrtoolslib/utils/trama.py
+VALID_SIZES = [85, 88, 91, 94]
+```
+
+### 3.2 Diagrama de la Trama (88 bytes - caso más común)
 
 ```
 ┌─────────┬─────────┬─────────┬──────────────────┬─────────┬──────────────────┐
@@ -64,7 +84,7 @@ Conexión de 3 hilos:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Bytes Fijos (Delimitadores)
+### 3.3 Bytes Fijos (Delimitadores)
 
 | Posición | Valor Hex | Función | Frecuencia |
 |----------|-----------|---------|------------|
@@ -81,9 +101,14 @@ Conexión de 3 hilos:
 | 47 | `0x08` | Separador de bloque D | 100% |
 | 58 | `0x08` | Separador de bloque E | 100% |
 
-**Total bytes fijos:** 16 de 88 (18% de overhead de sincronización)
+**Validación en código:**
+```python
+# De curryrtoolslib/utils/trama.py línea 13
+if not trama_bytes[0:2] != [b"\x00", b"\x08"]:
+    print("Trama inválida (No comienza por 0,8)")
+```
 
-### 3.3 Bytes Variables (Datos Útiles)
+### 3.4 Bytes Variables (Datos Útiles)
 
 **72 bytes de carga útil** distribuidos en bloques de datos entre los delimitadores.
 
@@ -101,14 +126,14 @@ El protocolo CCN utiliza un **alfabeto extremadamente limitado** de solo 12 valo
 | 8 | `0x08` | BS | Alto | Separador de campo |
 | 9 | `0x09` | TAB | Bajo | Dato variable |
 | 11 | `0x0B` | VT | Bajo | Dato variable |
-| 33 | `0x21` | `!` | Medio | Dato variable |
+| 33 | `0x21` | `!` | Medio | Dato variable (¡= '!') |
 | 40 | `0x28` | `(` | Medio | Dato variable |
 | 41 | `0x29` | `)` | Medio | Dato variable |
-| 97 | `0x61` | `a` | Alto | Dato variable |
-| 99 | `0x63` | `c` | Medio | Dato variable |
-| 104 | `0x68` | `h` | Alto | Dato variable |
-| 105 | `0x69` | `i` | Alto | Dato variable |
-| 107 | `0x6B` | `k` | Medio | Dato variable |
+| 97 | `0x61` | `a` | Alto | Dato variable (¡= 'a') |
+| 99 | `0x63` | `c` | Medio | Dato variable (¡= 'c') |
+| 104 | `0x68` | `h` | Alto | Dato variable (¡= 'h') |
+| 105 | `0x69` | `i` | Alto | Dato variable (¡= 'i') |
+| 107 | `0x6B` | `k` | Medio | Dato variable (¡= 'k') |
 
 ### 4.2 Observaciones sobre Codificación
 
@@ -118,51 +143,87 @@ El protocolo CCN utiliza un **alfabeto extremadamente limitado** de solo 12 valo
   - `h`, `i`, `k` pueden ser abreviaturas de funciones (Heat, Indoor, Cool?)
   - `a`, `c` podrían indicar estados (Auto, Cool)
 
-### 4.3 Distribución de Entropía
+### 4.3 Normalización de Datos
 
-```
-Bytes de baja entropía (fijos):     16 bytes  ████████░░░░░░░░░░
-Bytes de media entropía (semi-fijos): ~8 bytes  ████░░░░░░░░░░░░░░
-Bytes de alta entropía (datos):     ~64 bytes  ████████████████████████████░░░░
-Bytes candidatos a CRC:             ~4 bytes   ██░░░░░░░░░░░░░░░░
+El código actual elimina ciertos bytes "no necesarios" durante el preprocesamiento:
+
+```python
+# De curryrtoolslib/utils/trama.py líneas 115-127
+def normalizar_bloque(bloque: int, data: List[int]) -> List[int]:
+    """Elimina posiciones datos no necesarios conocidos."""
+    result = []
+    for pos, valor in enumerate(data):
+        if pos in [0]:  # Elimina 0x00 iniciales
+            continue
+        elif bloque in [0, 1, 2]:
+            if pos in [1, 2, 3, 4] and valor == 8:  # elimina 0x08 de campos 1-4
+                continue
+        elif bloque in [3, 4, 5]:
+            if pos in [1, 2] and valor == 8:  # elimina 0x08 de campos 5-6
+                continue
+        result.append(valor)
+    return result
 ```
 
 ---
 
-## 5. Campos Funcionales Identificados
+## 5. Captura y Almacenamiento de Datos
 
-### 5.1 Posiciones Candidatas por Función
+### 5.1 Formato Binario (Actual)
 
-Basado en análisis diferencial preliminar:
+El proyecto ha migrado de CSV a formato binario para mayor eficiencia:
 
-| Offset | Longitud | Función Probable | Observación |
-|--------|----------|------------------|-------------|
-| 3-5 | 3 bytes | **Velocidad ventilador** | Cambia con FAN1/FAN2/FAN3 |
-| 6 | 1 byte | Separador fijo | Siempre `0x08` |
-| 7 | 1 byte | **Modo de operación** | `0x21`=STOP, `0x61`=LOW, `0x63`=MED |
-| 8 | 1 byte | **Indicador de modo** | `0x69`, `0x28`, `0x68` - correlaciona con cold/hot/dry |
-| 9 | 1 byte | Sub-modo/estado | `0x68`, `0x28` variantes |
-| 10 | 1 byte | Control bits | `0x09` vs `0x0B` |
-| 11-12 | 2 bytes | Estado extendido | Pareja de valores `0x29/0x69/0x6B` |
-| 13 | 1 byte | **Temperatura/Setpoint** | `0x21`, `0x28`, `0x61`, `0x63`, `0x68` |
+```python
+# Estructura de archivos generados por devices_interface.py
 
-### 5.2 Estructura de Bloques de Datos
+Archivo .bin:
+- Contenido: Datos crudos de la trama (bytes)
+- Tamaño: Variable según trama (85/88/91/94 bytes por mensaje)
 
+Archivo .info (JSON):
+{
+    "stream": "dumps/<uuid>.bin",
+    "blocks": 10,           // Número de tramas capturadas
+    "timeout": 0.1,         // Timeout de lectura
+    "baudrate": 2400,       // Velocidad
+    "times": [              // Timestamps y tamaños
+        ["2024-11-27T21:16:00.123", 88],
+        ["2024-11-27T21:16:00.456", 88],
+        ...
+    ],
+    "uuid": "uuid-v4",
+    "values": "0,0,1,0,0,1"  // Estado de controles capturado
+}
 ```
-Bloque A (Bytes 3-14): Configuración principal
-├─ Bytes 3-5:  Fan speed encoding
-├─ Byte 6:     Separador (0x08)
-├─ Bytes 7-9:  Modo + estado activo
-├─ Bytes 10-12: Flags de control
-└─ Bytes 13-14: Setpoint / Temperatura
 
-Bloque B (Bytes 18-29): Configuración secundaria (repetición/redundancia?)
-Bloque C (Bytes 33-44): Estado extendido
-Bloque D (Bytes 48-57): Datos de display/indicadores
-Bloque E (Bytes 59-71): Datos de sensores
-Bloque F (Bytes 72-84): Datos de control
-Bloque G (Bytes 85-87): Checksum + terminación
+### 5.2 Comando de Captura Actual
+
+```bash
+python3 curryrtool.py device read \
+    -p /dev/ttyUSB0 \
+    -b 2400 \
+    -t 0.1 \
+    -o "0,0,1,0,0,1" \
+    -s
 ```
+
+**Parámetros**:
+- `-p`: Puerto serial
+- `-b`: Baudrate
+- `-t`: Timeout entre lecturas
+- `-o`: Estado de controles (fan1,fan2,fan3,cold,hot,dry)
+- `-s`: Guardar a archivo
+
+### 5.3 Formato Legacy (CSV)
+
+Los datos antiguos se mantienen en formato CSV para referencia:
+
+```csv
+Trama;Posiciones
+0,0,8,8,33,33,...;0,0,1,0,0,1
+```
+
+Ubicación: `dumps/datos_hex_2400_0-0-1-0-0-1_2024-11-27_21-16-00.csv`
 
 ---
 
@@ -180,15 +241,80 @@ Bloque G (Bytes 85-87): Checksum + terminación
 
 ### 6.2 Observaciones del Checksum
 
-- **Longitud probable:** 1-2 bytes al final de la trama (posiciones 86-87)
+- **Longitud probable:** 1-2 bytes al final de la trama (posiciones 86-87 en trama de 88)
 - **Tipo probable:** CRC-8 con polinomio propietario de Carrier
 - **Alternativa:** Suma ponderada o checksum por bloques
 
+### 6.3 Script de Análisis de Checksum
+
+```python
+# checksum_analysis.py - Script recomendado para fase de investigación
+
+def test_checksum_algorithms(frame):
+    """Prueba múltiples algoritmos de checksum contra la trama"""
+    data = frame[:-1]  # Asumiendo último byte es CRC
+    expected_crc = frame[-1]
+    
+    results = {}
+    
+    # XOR simple
+    xor_val = 0
+    for b in data:
+        xor_val ^= b
+    results['xor_all'] = xor_val == expected_crc
+    
+    # Suma módulo 256
+    results['sum_mod256'] = (sum(data) & 0xFF) == expected_crc
+    
+    # CRC-8 con diferentes polinomios
+    polys = [0x07, 0x31, 0x9B, 0xD5, 0xA6]
+    for poly in polys:
+        crc = crc8(data, poly)
+        results[f'crc8_0x{poly:02X}'] = crc == expected_crc
+    
+    return results
+```
+
 ---
 
-## 7. Comparativa con Otros Protocolos
+## 7. Emulación y Transmisión
 
-### 7.1 vs Modbus RTU
+### 7.1 Envío de Tramas Capturadas
+
+El sistema permite reproducir tramas capturadas para emular el comportamiento del termostato:
+
+```bash
+python3 curryrtool.py device write \
+    -p /dev/ttyUSB0 \
+    -b 2400 \
+    -t 0.1 \
+    -f dumps/<uuid>.bin \
+    -r 100 \
+    -i 5
+```
+
+**Parámetros**:
+- `-f`: Archivo de trama (.bin)
+- `-r`: Número de repeticiones
+- `-i`: Intervalo entre envíos (segundos)
+
+### 7.2 Modo Repetidor (Sniffer)
+
+Para capturar tráfico bidireccional o actuar como puente:
+
+```bash
+python3 curryrtool.py device repeat \
+    -p /dev/ttyUSB0 \      # Puerto de entrada
+    -r /dev/ttyUSB1 \      # Puerto de salida
+    -b 2400 \
+    -t 0.1
+```
+
+---
+
+## 8. Comparativa con Otros Protocolos
+
+### 8.1 vs Modbus RTU
 
 | Característica | Modbus RTU | CCN (Carrier) |
 |----------------|------------|---------------|
@@ -196,22 +322,22 @@ Bloque G (Bytes 85-87): Checksum + terminación
 | Dirección esclavo | Byte 0 | No identificada |
 | Código función | Byte 1 | No identificado |
 | CRC | 2 bytes (LSB-MSB) | 1-2 bytes (formato desconocido) |
-| Longitud | Variable | **Fija: 88 bytes** |
+| Longitud | Variable | **Variable: 85/88/91/94 bytes** |
 
-### 7.2 vs BACnet MS/TP
+### 8.2 vs BACnet MS/TP
 
 | Característica | BACnet MS/TP | CCN (Carrier) |
 |----------------|--------------|---------------|
 | Preamble | `0x55 0xFF` | `0x00 0x00 0x08` |
 | Frame Type | Byte 2 | No identificado |
 | Dirección | Bytes 3-4 | No identificada |
-| Longitud máxima | 501 bytes | **88 bytes fijos** |
+| Longitud máxima | 501 bytes | **94 bytes** |
 
 ---
 
-## 8. Hipótesis sobre la Codificación
+## 9. Hipótesis sobre la Codificación
 
-### 8.1 Modelo de Codificación "Carrier ASCII"
+### 9.1 Modelo de Codificación "Carrier ASCII"
 
 La limitación a valores 0-107 sugiere una codificación de 7-bits con restricciones:
 
@@ -220,7 +346,7 @@ Bits válidos: 0xxx xxxx (0-127 range, bit 7 siempre 0)
 Subconjunto usado: 0xxx xxxx donde xxx xxxx ∈ {0,8-11,33,40-41,97-99,104-105,107}
 ```
 
-### 8.2 Posible Estructura de Comandos
+### 9.2 Posible Estructura de Comandos
 
 Los valores ASCII imprimibles (`!`, `a`, `c`, `h`, `i`, `k`) podrían representar:
 
@@ -233,7 +359,7 @@ Los valores ASCII imprimibles (`!`, `a`, `c`, `h`, `i`, `k`) podrían representa
 | `i` (0x69) | Indoor / Idle | Estado interior |
 | `k` (0x6B) | ? | Estado especial |
 
-### 8.3 Codificación Numérica
+### 9.3 Codificación Numérica
 
 Para valores numéricos (temperaturas, setpoints):
 - Posible **offset + escala**: Valor = (byte - offset) × escala
@@ -241,57 +367,79 @@ Para valores numéricos (temperaturas, setpoints):
 
 ---
 
-## 9. Limitaciones Actuales del Análisis
+## 10. Limitaciones Actuales del Análisis
 
-### 9.1 Datos Insuficientes
+### 10.1 Datos Insuficientes
 
-1. **Dataset limitado:** Solo 13 tramas capturadas, todas con mismo estado (fan=med, dry=ON)
-2. **Sin variación de estados:** No se ha capturado transición entre modos
-3. **Sin referencia temporal:** No se ha medido intervalo entre tramas
-4. **Sin temperatura variable:** No se han capturado diferentes setpoints
+1. **Dataset limitado:** Solo 13 tramas CSV antiguas + capturas binarias recientes
+2. **Sin variación de estados sistemática:** No se ha capturado todas las combinaciones fan×modo
+3. **Sin referencia temporal detallada:** Intervalos entre tramas no medidos con precisión
+4. **Sin temperatura variable:** No se han capturado diferentes setpoints documentados
 
-### 9.2 Aspectos No Resueltos
+### 10.2 Aspectos No Resueltos
 
 - [ ] Algoritmo de checksum exacto
 - [ ] Codificación de temperatura ambiente
 - [ ] Codificación de temperatura setpoint
 - [ ] Identificación de bits de error/alarmas
 - [ ] Formato de dirección de dispositivo (si existe)
+- [ ] Correlación exacta byte-a-byte para cada control
 
 ---
 
-## 10. Referencias y Recursos
+## 11. Herramientas de Análisis Disponibles
 
-### 10.1 Documentación Carrier
+### 11.1 En el Proyecto
+
+| Script/Función | Ubicación | Propósito |
+|----------------|-----------|-----------|
+| `curryrtool.py` | Raíz | CLI principal |
+| `devices_interface.py` | `interfaces/` | Captura y emulación |
+| `trama.py` | `utils/` | Validación y normalización |
+| `ia.py` | `utils/` | Modelos ML para clasificación |
+
+### 11.2 Scripts Recomendados (Ver CHECKLIST.md)
+
+- `timing_analysis.py` - Medir período cíclico
+- `diff_analysis.py` - Comparar tramas entre estados
+- `checksum_crack.py` - Probar algoritmos CRC
+
+---
+
+## 12. Conclusión
+
+El protocolo CCN del termostato Carrier CRC2-NTC es un protocolo **propietario, unidireccional y cíclico** con las siguientes características distintivas:
+
+1. **Tramas variables de 85-94 bytes** (no fijas como inicialmente se pensó)
+2. **Alfabeto limitado a 12 valores** (0-107, subconjunto ASCII)
+3. **Estructura de bloques** separados por bytes `0x00` y `0x08`
+4. **Transmisión automática** sin requerir polling del maestro
+5. **Codificación posiblemente semántica** usando caracteres ASCII (`a`, `c`, `h`, `i`)
+6. **Formato binario optimizado** (.bin + .info JSON) para almacenamiento eficiente
+
+Para completar el análisis y habilitar la emulación completa del termostato, es necesario realizar **capturas sistemáticas con variación controlada de cada parámetro** (ver `CHECKLIST.md`).
+
+---
+
+## 13. Referencias y Recursos
+
+### 13.1 Documentación Carrier
 
 - NTC Controller Manual (CCN reference)
 - CRC2 Installation Manual (IOM 126H69)
 - Carrier Comfort Network specification (no público)
 
-### 10.2 Recursos del Proyecto
+### 13.2 Recursos del Proyecto
 
 | Archivo | Descripción |
 |---------|-------------|
-| `USB2RS485.py` | Captura de datos serie |
-| `trainning_tools.py` | Entrenamiento ML para predicción de estados |
-| `ia_tools.py` | Modelos TensorFlow para clasificación |
-| `dumps/*.csv` | Dataset de tramas capturadas |
+| `AGENTS.md` | Guía completa de la arquitectura actual |
+| `CHECKLIST.md` | Guía paso a paso para reverse engineering |
+| `README_es.md` | Documentación general del proyecto |
+| `curryrtool.py` | CLI principal |
+| `curryrtoolslib/` | Código fuente del paquete |
 
 ---
 
-## 11. Conclusión
-
-El protocolo CCN del termostato Carrier CRC2-NTC es un protocolo **propietario, unidireccional y cíclico** con las siguientes características distintivas:
-
-1. **Trama fija de 88 bytes** con delimitadores predecibles
-2. **Alfabeto limitado a 12 valores** (0-107, subconjunto ASCII)
-3. **Estructura de bloques** separados por bytes `0x00` y `0x08`
-4. **Transmisión automática** sin requerir polling del maestro
-5. **Codificación posiblemente semántica** usando caracteres ASCII (`a`, `c`, `h`, `i`)
-
-Para completar el análisis y habilitar la emulación del termostato, es necesario realizar **capturas sistemáticas con variación controlada de cada parámetro** (ver `CHECKLIST.md`).
-
----
-
-*Documento generado para el proyecto TermostatoAC-Carrier*  
-*Licencia: Open Source para investigación y desarrollo*
+*Documento actualizado para reflejar la arquitectura actual del proyecto (Marzo 2026)*
+*Versión 2.0 - Incluye múltiples tamaños de trama y formato binario*
