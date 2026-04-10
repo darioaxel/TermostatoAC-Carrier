@@ -370,56 +370,54 @@ class DeviceInterface(CommonInterface):
     
 
     def read_data_from(self, ser, baudrate, timeout, posiciones=None, hex_file: Dict[str, Union[str, int, List[str]]] = {}) -> Optional[str]:
-        stream_data: Tuple[bytes, List[str]] = [] # type: ignore[assignment]
         i = 0
         print("## ESPERANDO TRAMA %s" % i)
-        x = 0
-        tiempos_trama = []
+        
         while True:
-            data = b""
+            # Acumula datos hasta detectar fin de trama (timeout sin datos)
+            full_data = bytearray()
+            tiempos_trama = []
+            last_data_time = time.time()
+            
             while True:
-                tiempo_inicio = datetime.now()
-                new_data = ser.read(1)
-                tiempos_trama.append(str(tiempo_inicio))
-                if new_data:
-                    data += new_data
+                data = ser.read(1024)  # Lee bloques de hasta 1024 bytes
+                if data:
+                    tiempo_inicio = datetime.now()
+                    full_data.extend(data)
+                    tiempos_trama.append([str(tiempo_inicio), len(data)])
+                    last_data_time = time.time()
+                    print(f"  Recibido bloque: {len(data)} bytes (total: {len(full_data)})")
                 else:
-                    break
+                    # Si no hay datos y ya acumulamos algo, verificar si es fin de trama
+                    if len(full_data) > 0 and (time.time() - last_data_time) > 0.5:
+                        break
+                    # Si no tenemos datos, seguir esperando
+                    if len(full_data) == 0:
+                        continue
+                    # Pequeña pausa antes de verificar de nuevo
+                    time.sleep(0.05)
+            
+            if len(full_data) == 0:
+                continue
                 
-            valid = True
-            if data:
-                if x == 0:
-                    tiempos_trama = [tiempos_trama[-1]]
-                stream_data.append([data, tiempos_trama]) # type: ignore[attr-defined]
-                tiempos_trama = []
-                print(f"Recibido {i}/{x+1}: {[hex(val) for val in data]} ({len(data)} bytes)")
-                #print(f"Recibido {i}/{x+1}: {[val for val in data]} ({len(data)} bytes)")
-                #print(f"Recibido {i}/{x+1}: {[chr(val) for val in data]} ({len(data)} bytes)")
-                x+=1
+            print(f"Recibida trama completa: {[hex(val) for val in full_data[:20]]}... ({len(full_data)} bytes)")
+            
+            valid = trama_tools.validar_trama_bytes(list(full_data))
+            if valid:
+                # Divide en bloques individuales para guardar
+                total_data = [bytes([b]) for b in full_data]
+                file_name = trama_tools.guardar_trama_bytes(total_data, tiempos_trama, baudrate, timeout, posiciones)
+                if hex_file:
+                    hex_file["files"].append(file_name)
+                else:
+                    return file_name
+                print("# TRAMA GUARDADA: %s" % file_name)
             else:
-                if not stream_data:
-                    continue
-                total_data = []
-                total_times = []
-                full_data = [] # type: ignore[var-annotated]
-                for byte_, time_ in stream_data:
-                    total_data.append(byte_)
-                    total_times.append([time_, len(byte_)]) # type: ignore [arg-type]
-                    full_data += byte_ # type: ignore[arg-type]
-
-                valid = trama_tools.validar_trama_bytes(full_data)
-                if valid:
-                    file_name = trama_tools.guardar_trama_bytes(total_data, total_times, baudrate, timeout, posiciones) # type: ignore[arg-type]
-                    if hex_file:
-                        hex_file["files"].append(file_name) # type: ignore[union-attr]
-                    else:
-                        return file_name
-                stream_data = [] # type: ignore[assignment]
-                
-                print("# STREAM TERMINADO %s bytes" % (len(full_data)))
-                i+= 1
-                x= 0
-                print("## ESPERANDO TRAMA %s" % i)
+                print("# TRAMA INVÁLIDA (no se guarda)")
+            
+            print("# STREAM TERMINADO %s bytes" % len(full_data))
+            i += 1
+            print("\n## ESPERANDO TRAMA %s" % i)
 
 def main_menu(iface: 'DeviceInterface'):
     while True:

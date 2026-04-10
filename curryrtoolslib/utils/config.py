@@ -53,10 +53,10 @@ class ConfigurationManager:
                 print(f"Error al obtener la clave {key}: {e}")
             if current_val is None or current_val != val:
                 self.config.set('CONFIG', key, str(val))
-                need_updated = True
+                need_update = True
             
                 
-        if need_updated:
+        if need_update:
             self.save_config_file()
     
     def load_config(self) -> None:

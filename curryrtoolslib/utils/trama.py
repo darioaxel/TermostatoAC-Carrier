@@ -6,15 +6,22 @@ import os
 from typing import List, Any, Union, Dict, Tuple
 from .. import CONFIG
 
-VALID_SIZES = [85,88,91,94]
+VALID_SIZES = [66, 85, 88, 91, 94, 100]
 
 def validar_trama_bytes(trama_bytes: List[bytes]) -> bool:
     valid = True
-    if not trama_bytes[0:2] != [b"\x00",b"\x08"]:
-        print("Trama inválida (No comienza por 0,8)",trama_bytes)
+    # Busca el patrón 0x00, 0x08 en cualquier posición inicial
+    header_found = False
+    for i in range(len(trama_bytes) - 1):
+        if trama_bytes[i] == 0x00 and trama_bytes[i+1] == 0x08:
+            header_found = True
+            break
+    
+    if not header_found:
+        print("Trama inválida (No contiene header 0x00,0x08)", [hex(b) for b in trama_bytes[:10]])
         valid = False
     elif len(trama_bytes) not in VALID_SIZES:
-        print("Trama inválida (No tiene %s bytes):" % (VALID_SIZES), trama_bytes)
+        print("Trama inválida (Tiene %s bytes, se esperaba %s):" % (len(trama_bytes), VALID_SIZES))
         valid = False
     
     return valid
